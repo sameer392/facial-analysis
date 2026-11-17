@@ -105,6 +105,11 @@ class V2Payload:
 
 # ---------------------------------------------------------------- helpers
 
+def is_v1_path(rel: str) -> bool:
+    """True when a relative path is a version 1 output: a root-level V1 name, or anything under frames/."""
+    return rel in V1_PROTECTED_NAMES or rel.split("/")[0] == "frames"
+
+
 def _rel_to_path(rel: str, root: Path) -> Path:
     """Convert a POSIX-style manifest path to a platform path under root. Refuses escapes."""
     parts = rel.split("/")
@@ -182,7 +187,7 @@ def prevalidate(payload: V2Payload) -> int:
     n = len(payload.timeline_rows)
     issues = []
     for rel in payload.arrays:
-        if rel.split("/")[-1] in V1_PROTECTED_NAMES or rel in V1_PROTECTED_NAMES:
+        if is_v1_path(rel):
             issues.append(f"{rel} collides with a version 1 name")
     for spec in ARRAY_SPECS:
         if spec.relative_path not in payload.arrays:
@@ -567,7 +572,7 @@ def _check_before_removal(session: Path, manifest: dict) -> None:
     issues = validate_manifest(manifest)
     for entry in manifest.get("files", []):
         rel = entry.get("path", "")
-        if rel in V1_PROTECTED_NAMES or rel.split("/")[0] in V1_PROTECTED_NAMES:
+        if is_v1_path(rel):
             issues.append(f"manifest lists a version 1 file: {rel}")
     changed = []
     for entry in manifest.get("files", []):

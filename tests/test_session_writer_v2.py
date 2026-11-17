@@ -327,6 +327,15 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class VersionOneNameTests(unittest.TestCase):
+    def test_only_root_level_version_one_names_are_protected(self):
+        self.assertTrue(w.is_v1_path("facial_data.json"))
+        self.assertTrue(w.is_v1_path("frames/frame_000001.jpg"))
+        self.assertFalse(w.is_v1_path("quality/tracking_quality.json"))
+        self.assertFalse(w.is_v1_path("facial/landmarks.npy"))
+        self.assertFalse(w.is_v1_path("hands/calibration.json"))
+
+
 class PostPublicationTests(SessionTestCase):
     def test_damage_during_publication_is_caught_before_metadata_is_written(self):
         from unittest import mock
