@@ -434,17 +434,19 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
     if issues:
         raise V2ValidationError("manifest verification failed: " + "; ".join(issues))
 
+    # Write the manifest file first, then record the checksum of its exact bytes in metadata.json.
+    _write_text_atomic(staging / MANIFEST_FILE, json.dumps(manifest, indent=2, sort_keys=True))
     metadata = json.loads(json.dumps(payload.metadata))
     metadata["schema_version"] = SCHEMA_VERSION
     metadata["outputs"] = {
         "manifest_file": MANIFEST_FILE,
-        "manifest_sha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest(),
+        "manifest_sha256": _sha256(staging / MANIFEST_FILE),
         "file_count": len(manifest["files"]),
     }
-    if validate_metadata(metadata):
-        raise V2ValidationError("metadata: " + "; ".join(validate_metadata(metadata)))
+    metadata_issues = validate_metadata(metadata)
+    if metadata_issues:
+        raise V2ValidationError("metadata: " + "; ".join(metadata_issues))
     _write_text_atomic(staging / METADATA_FILE, json.dumps(metadata, indent=2, sort_keys=True))
-    _write_text_atomic(staging / MANIFEST_FILE, json.dumps(manifest, indent=2, sort_keys=True))
 
     previous = None
     if layout == "v2":

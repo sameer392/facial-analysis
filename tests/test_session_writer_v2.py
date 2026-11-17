@@ -127,6 +127,12 @@ class CreationTests(SessionTestCase):
         self.assertTrue(np.isnan(pose[1]).all())
         self.assertTrue(np.isfinite(pose[0, :, 0]).all())
 
+    def test_metadata_manifest_checksum_matches_the_manifest_file_bytes(self):
+        w.write_v2_session(self.session, make_payload())
+        meta = json.loads((self.session / "metadata.json").read_text(encoding="utf-8"))
+        on_disk = hashlib.sha256((self.session / "manifest.json").read_bytes()).hexdigest()
+        self.assertEqual(meta["outputs"]["manifest_sha256"], on_disk)
+
     def test_timeline_and_metadata_are_written(self):
         w.write_v2_session(self.session, make_payload())
         timeline = pd.read_csv(self.session / "timeline.csv")
