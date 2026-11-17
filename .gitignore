@@ -11,6 +11,8 @@ models/**
 !models/**/.gitkeep
 # Generated datasets (created locally by extract_faces.py)
 datasets/
+# Synthetic demo output if written inside the project (see demo_data.py)
+demo_data/
 recordings/raw/**/*.mp4
 recordings/processed/*
 !recordings/processed/.gitkeep

@@ -1,4 +1,4 @@
- 
+﻿ 
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -9,13 +9,14 @@ import json
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from file_safety import atomic_write_text
 from project_paths import MODEL_PATH, is_valid_person, is_valid_session, session_dataset_dir, session_video
 
 
 # Usage: python src/analysis/extract_faces.py <person> <session>
-# Example: python src/analysis/extract_faces.py sameer_gupta session-001
+# Example: python src/analysis/extract_faces.py demo_person session-001
 parser = argparse.ArgumentParser(description="Extract MediaPipe facial data for one recording session.")
-parser.add_argument("person", help="Person or project folder under recordings/raw, e.g. sameer_gupta")
+parser.add_argument("person", help="Person or project folder under recordings/raw, e.g. demo_person")
 parser.add_argument("session", help="Session ID, e.g. session-001")
 args = parser.parse_args()
 
@@ -36,8 +37,9 @@ FRAMES_DIR = OUTPUT / "frames"
 if not VIDEO.is_file():
     raise SystemExit(f"Video not found: {VIDEO}")
 
-# Never overwrite an existing dataset
-if (OUTPUT / "facial_data.json").exists():
+# Never overwrite an existing dataset. There is no --force for extraction: to regenerate,
+# delete the session's dataset folder first (from the dashboard or by hand).
+if (OUTPUT / "facial_data.json").exists() or (FRAMES_DIR.is_dir() and any(FRAMES_DIR.iterdir())):
     raise SystemExit(f"Dataset already exists, refusing to overwrite: {OUTPUT}")
 
 FRAMES_DIR.mkdir(parents=True, exist_ok=True)
@@ -175,16 +177,8 @@ while cap.isOpened():
 cap.release()
 landmarker.close()
 
-# Save all extracted data
-with open(
-    OUTPUT / "facial_data.json",
-    "w"
-) as file:
-
-    json.dump(
-        all_data,
-        file
-    )
+# Save all extracted data (written atomically, so an interrupted run leaves no partial file)
+atomic_write_text(OUTPUT / "facial_data.json", json.dumps(all_data))
 
 print("Processing completed!")
 

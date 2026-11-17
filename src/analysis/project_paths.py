@@ -10,13 +10,17 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RECORDINGS_RAW = PROJECT_ROOT / "recordings" / "raw"
-DATASETS_ROOT = PROJECT_ROOT / "datasets"
+# Recordings and datasets normally live in the project folder. Set FACIAL_DATA_HOME to use
+# another folder with the same recordings/ and datasets/ layout (for example, demo data).
+DATA_HOME = Path(os.environ["FACIAL_DATA_HOME"]).expanduser() if os.environ.get("FACIAL_DATA_HOME") else PROJECT_ROOT
+RECORDINGS_RAW = DATA_HOME / "recordings" / "raw"
+DATASETS_ROOT = DATA_HOME / "datasets"
 MODEL_PATH = PROJECT_ROOT / "models" / "mediapipe" / "face_landmarker.task"
 
 PERSON_PATTERN = re.compile(r"[a-z0-9][a-z0-9_-]{0,59}")

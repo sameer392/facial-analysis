@@ -1,6 +1,6 @@
-"""Load extracted facial data for a session and compute tracking metrics.
+﻿"""Load extracted facial data for a session and compute tracking metrics.
 
-Every session is addressed by (person, session), for example ("sameer_gupta", "session-001").
+Every session is addressed by (person, session), for example ("demo_person", "session-001").
 Inputs:  recordings/raw/<person>/<session>.mp4 and datasets/<person>/<session>/facial_data.json
 Outputs: datasets/<person>/<session>/ (motion_metrics.csv, blink_events.csv,
          tracking_quality.json, calibration.json) and datasets/<person>/dataset_metadata.json
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from facial_3d_analyzer import head_pose_angles
+from file_safety import OutputExistsError, atomic_write_csv, atomic_write_text, check_writable
 from motion_analyzer import (
     ACTIVITY_PREFIXES,
     compensate_head_pose,
@@ -195,7 +197,9 @@ def analyse_session(session: Session) -> SessionAnalysis:
     mask = neutral_frame_mask(ds.blendshapes, usable)
     neutral = neutral_shape(compensated, mask)
     offset = np.linalg.norm(compensated - neutral, axis=2)
-    neutral_offset = np.where(usable, np.nanmean(offset, axis=1), np.nan)
+    with warnings.catch_warnings():  # frames without a face are all-NaN by design
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        neutral_offset = np.where(usable, np.nanmean(offset, axis=1), np.nan)
     displacement, velocity, acceleration = landmark_kinematics(compensated, ds.timestamps_s, usable)
 
     def column(name: str) -> np.ndarray:
@@ -234,19 +238,34 @@ def analyse_session(session: Session) -> SessionAnalysis:
     )
 
 
-def save_session_outputs(analysis: SessionAnalysis, session: Session) -> Path:
-    """Write derived outputs into the session's dataset folder. Original recordings are never touched."""
+MOTION_OUTPUT_NAMES = (
+    "motion_metrics.csv",
+    "blink_events.csv",
+    "tracking_quality.json",
+    "calibration.json",
+)
+
+
+def motion_output_paths(session: Session) -> list[Path]:
+    return [session.dataset_dir / name for name in MOTION_OUTPUT_NAMES]
+
+
+def save_session_outputs(analysis: SessionAnalysis, session: Session, force: bool = False) -> Path:
+    """Write derived outputs into the session's dataset folder. Original recordings are never touched.
+
+    Refuses to overwrite existing motion outputs unless force is True.
+    """
+    check_writable(motion_output_paths(session), force=force)
     out = session.dataset_dir
-    out.mkdir(parents=True, exist_ok=True)
-    analysis.table.to_csv(out / "motion_metrics.csv", index=False)
-    analysis.blinks.to_csv(out / "blink_events.csv", index=False)
-    (out / "tracking_quality.json").write_text(json.dumps(analysis.quality, indent=2), encoding="utf-8")
-    (out / "calibration.json").write_text(json.dumps({
+    atomic_write_csv(analysis.table, out / "motion_metrics.csv")
+    atomic_write_csv(analysis.blinks, out / "blink_events.csv")
+    atomic_write_text(out / "tracking_quality.json", json.dumps(analysis.quality, indent=2))
+    atomic_write_text(out / "calibration.json", json.dumps({
         "session_id": analysis.session_id,
         "neutral_frames": analysis.neutral_frames,
         "method": "lowest 10% of mouth/jaw/eye/brow activity among tracked frames",
         "head_pose": "rotation removed per frame; translation and scale ignored",
-    }, indent=2), encoding="utf-8")
+    }, indent=2))
     return out
 
 
@@ -263,24 +282,30 @@ def write_person_metadata(person: str) -> Path:
             "frames": n_frames,
         })
     path = person_dataset_dir(person) / "dataset_metadata.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
+    atomic_write_text(path, json.dumps({
         "person": person,
         "identity_type": "single_person",
         "sessions": sessions,
-    }, indent=2), encoding="utf-8")
+    }, indent=2))
     return path
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Rebuild motion metrics for every processed session of a person.")
     parser.add_argument("person")
+    parser.add_argument("--force", action="store_true",
+                        help="overwrite existing motion outputs (never touches facial_data.json or recordings)")
     args = parser.parse_args()
     sessions = processed_sessions(args.person)
     if not sessions:
         raise SystemExit(f"No processed sessions for '{args.person}'. Run extract_faces.py first.")
+    try:
+        for session in sessions:
+            check_writable(motion_output_paths(session), force=args.force)
+    except OutputExistsError as exc:
+        raise SystemExit(str(exc))
     for session in sessions:
         result = analyse_session(session)
-        path = save_session_outputs(result, session)
+        path = save_session_outputs(result, session, force=True)
         print(f"{session.session_id}: {len(result.table)} frames, {len(result.blinks)} blinks -> {path}")
     print("Metadata:", write_person_metadata(args.person))
