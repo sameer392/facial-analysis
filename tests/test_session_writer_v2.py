@@ -327,6 +327,23 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class StagingCleanupTests(SessionTestCase):
+    def test_ordinary_error_during_staging_removes_the_staging_folder(self):
+        from unittest import mock
+
+        with mock.patch.object(w, "_build_manifest", side_effect=RuntimeError("disk problem")):
+            with self.assertRaises(RuntimeError):
+                w.write_v2_session(self.session, make_payload())
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+        self.assertFalse((self.session / "metadata.json").exists())
+        self.assert_v1_unchanged()
+
+    def test_simulated_crash_keeps_the_staging_folder_for_recovery(self):
+        with self.assertRaises(w.SimulatedInterruption):
+            w.write_v2_session(self.session, make_payload(), fail_at="validate")
+        self.assertEqual(len([p for p in self.session.iterdir() if p.name.startswith(".v2-staging")]), 1)
+
+
 class DestinationCollisionTests(SessionTestCase):
     def test_stray_file_at_a_destination_is_not_overwritten(self):
         (self.session / "timeline.csv").write_text("stray\n", encoding="utf-8")

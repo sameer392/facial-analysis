@@ -426,6 +426,23 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
 
     staging = session / f"{STAGING_PREFIX}{uuid.uuid4().hex}"
     staging.mkdir()
+    try:
+        manifest = _stage_and_verify(staging, payload, fail_at)
+    except SimulatedInterruption:
+        raise  # a real crash cannot clean up, so the staging folder is left for recovery
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)  # an ordinary error: leave nothing behind
+        raise
+
+    if layout == "v2":
+        _move_previous(session, _load_manifest(session / MANIFEST_FILE))
+    _publish(session, staging, manifest, fail_at)
+    shutil.rmtree(staging, ignore_errors=True)
+    return manifest
+
+
+def _stage_and_verify(staging: Path, payload: V2Payload, fail_at: str | None) -> dict:
+    """Write, validate and checksum every staged file. Returns the manifest, which is also written to staging."""
     written = _write_staging(staging, payload, fail_at)
     _validate_staged(staging, payload, written, fail_at)
 
@@ -447,12 +464,6 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
     if metadata_issues:
         raise V2ValidationError("metadata: " + "; ".join(metadata_issues))
     _write_text_atomic(staging / METADATA_FILE, json.dumps(metadata, indent=2, sort_keys=True))
-
-    previous = None
-    if layout == "v2":
-        previous = _move_previous(session, _load_manifest(session / MANIFEST_FILE))
-    _publish(session, staging, manifest, fail_at)
-    shutil.rmtree(staging, ignore_errors=True)
     return manifest
 
 
