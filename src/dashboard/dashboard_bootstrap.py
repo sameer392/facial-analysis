@@ -25,13 +25,27 @@ RELOAD_ORDER = [
 ]
 
 
+def _refresh(name: str) -> None:
+    """Reload a module, or import it fresh if it is missing or was dropped during a reload.
+
+    importlib.reload raises ImportError ("not in sys.modules") when Streamlit's file watcher
+    has already removed the module from sys.modules. In that case a normal import is the
+    correct recovery.
+    """
+    module = sys.modules.get(name)
+    if module is None:
+        importlib.import_module(name)
+        return
+    try:
+        importlib.reload(module)
+    except ImportError:
+        sys.modules.pop(name, None)
+        importlib.import_module(name)
+
+
 def reload_project_modules() -> None:
     for folder in (ANALYSIS_DIR, DASHBOARD_DIR):
         if str(folder) not in sys.path:
             sys.path.insert(0, str(folder))
     for name in RELOAD_ORDER:
-        module = sys.modules.get(name)
-        if module is None:
-            importlib.import_module(name)
-        else:
-            importlib.reload(module)
+        _refresh(name)
