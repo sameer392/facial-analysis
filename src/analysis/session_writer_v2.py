@@ -147,6 +147,14 @@ def _expected_arrays(payload: V2Payload) -> list[str]:
     return names
 
 
+def _planned_paths(payload: V2Payload) -> list[str]:
+    """Every data file the operation will publish, excluding the two structural files."""
+    return _expected_arrays(payload) + [
+        "facial/blendshapes.csv", TIMELINE_FILE, "hands/handedness.csv",
+        "quality/tracking_quality.json",
+    ]
+
+
 # ---------------------------------------------------------------- validation before writing
 
 def prevalidate(payload: V2Payload) -> int:
@@ -402,6 +410,19 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
         raise V2ExistsError(f"complete version 2 dataset exists: {session}. Use regenerate=True (--regenerate-v2).")
 
     prevalidate(payload)
+
+    # Refuse before staging if a planned destination is already occupied by something that is
+    # not part of an existing version 2 dataset. Such files are never overwritten.
+    owned = set()
+    if layout == "v2":
+        old_manifest = _load_manifest(session / MANIFEST_FILE)
+        if old_manifest is None:
+            raise V2Error("existing version 2 manifest is unreadable; refusing to replace the dataset")
+        owned = {e["path"] for e in old_manifest.get("files", [])} | {MANIFEST_FILE, METADATA_FILE}
+    collisions = [rel for rel in _planned_paths(payload)
+                  if rel not in owned and _rel_to_path(rel, session).exists()]
+    if collisions:
+        raise V2Error("destination already exists, refusing to overwrite: " + ", ".join(collisions))
 
     staging = session / f"{STAGING_PREFIX}{uuid.uuid4().hex}"
     staging.mkdir()

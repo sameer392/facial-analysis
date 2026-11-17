@@ -321,6 +321,23 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class DestinationCollisionTests(SessionTestCase):
+    def test_stray_file_at_a_destination_is_not_overwritten(self):
+        (self.session / "timeline.csv").write_text("stray\n", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.write_v2_session(self.session, make_payload())
+        self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "stray\n")
+        self.assertFalse((self.session / "metadata.json").exists())
+        self.assert_v1_unchanged()
+
+    def test_collision_check_leaves_no_staging_folder(self):
+        (self.session / "facial").mkdir()
+        (self.session / "facial" / "landmarks.npy").write_bytes(b"stray")
+        with self.assertRaises(w.V2Error):
+            w.write_v2_session(self.session, make_payload())
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+
+
 class IncompleteDetectionTests(SessionTestCase):
     def test_v1_only(self):
         self.assertEqual(s2.session_layout(self.session), "v1")
