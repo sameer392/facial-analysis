@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -85,3 +86,47 @@ def session_has_dataset(person: str, session: str) -> bool:
 
 def list_processed_sessions(person: str) -> list[str]:
     return [s for s in list_sessions(person) if session_has_dataset(person, s)]
+
+
+def _safe_target(path: Path, root: Path) -> Path:
+    """Refuse to delete anything that is not strictly inside root."""
+    resolved = path.resolve()
+    root_resolved = root.resolve()
+    if resolved == root_resolved or root_resolved not in resolved.parents:
+        raise ValueError(f"Refusing to delete outside {root_resolved}: {resolved}")
+    return resolved
+
+
+def delete_session_dataset(person: str, session: str) -> bool:
+    """Delete datasets/<person>/<session>/. The raw video is kept."""
+    if not (is_valid_person(person) and is_valid_session(session)):
+        raise ValueError("Invalid person or session name.")
+    target = _safe_target(session_dataset_dir(person, session), DATASETS_ROOT)
+    if not target.exists():
+        return False
+    shutil.rmtree(target)
+    return True
+
+
+def delete_session_video(person: str, session: str) -> bool:
+    """Delete recordings/raw/<person>/<session>.mp4. Does not touch the dataset."""
+    if not (is_valid_person(person) and is_valid_session(session)):
+        raise ValueError("Invalid person or session name.")
+    target = _safe_target(session_video(person, session), RECORDINGS_RAW)
+    if not target.exists():
+        return False
+    target.unlink()
+    return True
+
+
+def delete_person(person: str) -> bool:
+    """Delete everything for a person/project: raw videos and all datasets."""
+    if not is_valid_person(person):
+        raise ValueError("Invalid person or project name.")
+    removed = False
+    for root in (RECORDINGS_RAW, DATASETS_ROOT):
+        target = _safe_target(root / person, root)
+        if target.exists():
+            shutil.rmtree(target)
+            removed = True
+    return removed

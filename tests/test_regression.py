@@ -61,6 +61,57 @@ class NamingTests(unittest.TestCase):
         self.assertEqual(dataset.parts[-3:], ("datasets", "sameer_gupta", "session-001"))
 
 
+class DeletionTests(unittest.TestCase):
+    """Deletion runs in a temporary folder, never in the real project data."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self._tmp = Path(tempfile.mkdtemp())
+        self._shutil = shutil
+        self._orig = (pp.RECORDINGS_RAW, pp.DATASETS_ROOT)
+        pp.RECORDINGS_RAW = self._tmp / "recordings" / "raw"
+        pp.DATASETS_ROOT = self._tmp / "datasets"
+        for person in ("alice", "bob"):
+            (pp.RECORDINGS_RAW / person).mkdir(parents=True)
+            (pp.DATASETS_ROOT / person / "session-001").mkdir(parents=True)
+            (pp.DATASETS_ROOT / person / "session-001" / "facial_data.json").write_text("[]")
+            (pp.RECORDINGS_RAW / person / "session-001.mp4").write_bytes(b"x")
+
+    def tearDown(self):
+        pp.RECORDINGS_RAW, pp.DATASETS_ROOT = self._orig
+        self._shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_delete_dataset_keeps_video(self):
+        self.assertTrue(pp.delete_session_dataset("alice", "session-001"))
+        self.assertFalse((pp.DATASETS_ROOT / "alice" / "session-001").exists())
+        self.assertTrue((pp.RECORDINGS_RAW / "alice" / "session-001.mp4").exists())
+
+    def test_delete_video_keeps_other_person(self):
+        self.assertTrue(pp.delete_session_video("alice", "session-001"))
+        self.assertFalse((pp.RECORDINGS_RAW / "alice" / "session-001.mp4").exists())
+        self.assertTrue((pp.RECORDINGS_RAW / "bob" / "session-001.mp4").exists())
+
+    def test_delete_person_removes_raw_and_datasets_only_for_that_person(self):
+        self.assertTrue(pp.delete_person("alice"))
+        self.assertFalse((pp.RECORDINGS_RAW / "alice").exists())
+        self.assertFalse((pp.DATASETS_ROOT / "alice").exists())
+        self.assertTrue((pp.RECORDINGS_RAW / "bob").exists())
+        self.assertTrue((pp.DATASETS_ROOT / "bob").exists())
+
+    def test_invalid_names_are_refused(self):
+        for bad in ("..", "../bob", "alice/../bob", ""):
+            with self.subTest(name=bad), self.assertRaises(ValueError):
+                pp.delete_person(bad)
+        with self.assertRaises(ValueError):
+            pp.delete_session_video("alice", "../session-001")
+
+    def test_missing_targets_return_false(self):
+        self.assertFalse(pp.delete_session_dataset("alice", "session-009"))
+        self.assertFalse(pp.delete_person("nobody"))
+
+
 class SyntheticMotionTests(unittest.TestCase):
     def test_identity_rotation_only_centres_the_face(self):
         pts = np.random.default_rng(0).random((1, 478, 3))

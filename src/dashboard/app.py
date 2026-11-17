@@ -12,6 +12,9 @@ from common import select_person_and_session  # noqa: E402  (sets up sys.path fo
 from project_paths import (  # noqa: E402
     PROJECT_ROOT,
     create_person,
+    delete_person,
+    delete_session_dataset,
+    delete_session_video,
     is_valid_person,
     is_valid_session,
     list_persons,
@@ -133,6 +136,53 @@ with st.expander("Add or process a recording", expanded=not persons):
                             "success", f"{target_person}/{session_name} was added and analysed.")
                         st.cache_data.clear()
                         st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Manage data: delete a session's dataset, a raw video, or a whole person/project
+# ---------------------------------------------------------------------------
+if list_persons():
+    with st.expander("Manage data (delete)", expanded=False):
+        st.warning("Deletion cannot be undone. Type the name shown to confirm.")
+        del_person = st.selectbox("Person / project", list_persons(), key="del_person")
+        del_session = st.selectbox("Session", ["(none)"] + list_sessions(del_person), key="del_session")
+        del_mode = st.radio(
+            "What to delete",
+            [
+                "Dataset of this session (keep the raw video)",
+                "Raw video of this session and its dataset",
+                "Entire person/project (all raw videos and datasets)",
+            ],
+            key="del_mode",
+        )
+        whole_person = del_mode.startswith("Entire")
+        session_chosen = del_session != "(none)"
+        required = del_person if whole_person else del_session
+        typed = st.text_input(f"Type '{required}' to confirm" if session_chosen or whole_person else "Select a session",
+                              key="del_confirm")
+        can_delete = (whole_person or session_chosen) and typed == required
+        if st.button("Delete", type="primary", disabled=not can_delete):
+            message = None
+            try:
+                if whole_person:
+                    removed = delete_person(del_person)
+                    message = ("success", f"Deleted all data for {del_person}.") if removed else \
+                        ("error", f"Nothing to delete for {del_person}.")
+                elif del_mode.startswith("Dataset"):
+                    removed = delete_session_dataset(del_person, del_session)
+                    message = ("success", f"Deleted dataset for {del_person}/{del_session}.") if removed else \
+                        ("error", f"No dataset found for {del_person}/{del_session}.")
+                else:
+                    delete_session_dataset(del_person, del_session)
+                    removed = delete_session_video(del_person, del_session)
+                    message = ("success", f"Deleted raw video and dataset for {del_person}/{del_session}.") if removed \
+                        else ("error", f"No raw video found for {del_person}/{del_session}.")
+            except (ValueError, OSError) as exc:
+                st.error(f"Delete failed: {exc}")
+            if message:
+                st.session_state["upload_message"] = message
+                st.cache_data.clear()
+                st.rerun()  # outside the try block so the rerun is not treated as an error
 
 
 # ---------------------------------------------------------------------------
