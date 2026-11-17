@@ -265,6 +265,14 @@ class RegenerationAndRollbackTests(SessionTestCase):
         with self.assertRaises(w.V2ExistsError):
             w.write_v2_session(self.session, make_payload(seed=1))
 
+    def test_regeneration_refuses_when_existing_manifest_is_unreadable(self):
+        w.write_v2_session(self.session, make_payload(seed=0))
+        old = (self.session / "facial" / "landmarks.npy").read_bytes()
+        (self.session / "manifest.json").write_text("{corrupt", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.write_v2_session(self.session, make_payload(seed=1), regenerate=True)
+        self.assertEqual((self.session / "facial" / "landmarks.npy").read_bytes(), old)
+
     def test_regeneration_replaces_and_keeps_previous(self):
         first = w.write_v2_session(self.session, make_payload(seed=0))
         second = w.write_v2_session(self.session, make_payload(seed=1), regenerate=True)

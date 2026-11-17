@@ -334,7 +334,9 @@ def _previous_dirs(session: Path) -> list[Path]:
 def _move_previous(session: Path, manifest: dict | None) -> Path | None:
     """Move the existing version 2 files aside. Nothing is deleted."""
     if manifest is None:
-        return None
+        # Without a readable manifest we cannot tell which files are version 2 output, so refuse
+        # rather than overwrite them. Nothing has been moved at this point.
+        raise V2Error("existing version 2 manifest is unreadable; refusing to replace the dataset")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     previous = session / f"{PREVIOUS_PREFIX}{stamp}-{uuid.uuid4().hex[:8]}"
     listed = [e["path"] for e in manifest.get("files", [])] + [MANIFEST_FILE, METADATA_FILE]
