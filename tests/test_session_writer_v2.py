@@ -327,6 +327,16 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class DurabilityTests(SessionTestCase):
+    def test_every_written_file_is_flushed_to_disk_before_it_is_renamed(self):
+        from unittest import mock
+
+        with mock.patch.object(w.os, "fsync", wraps=w.os.fsync) as fsync:
+            manifest = w.write_v2_session(self.session, make_payload())
+        # one fsync per staged data file, plus manifest.json and metadata.json
+        self.assertGreaterEqual(fsync.call_count, len(manifest["files"]) + 2)
+
+
 class StagingCleanupTests(SessionTestCase):
     def test_ordinary_error_during_staging_removes_the_staging_folder(self):
         from unittest import mock

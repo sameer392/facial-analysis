@@ -126,10 +126,18 @@ def _check_fail(point: str, fail_at: str | None) -> None:
         raise SimulatedInterruption(point)
 
 
+def _flush_and_sync(handle) -> None:
+    """Push data to the disk before the file is renamed into place, so a power cut cannot leave an empty file."""
+    handle.flush()
+    os.fsync(handle.fileno())
+
+
 def _write_npy_atomic(path: Path, array: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name("." + path.name + ".tmp.npy")
-    np.save(tmp, array, allow_pickle=False)
+    tmp = path.with_name("." + path.name + ".tmp")
+    with tmp.open("wb") as handle:
+        np.save(handle, array, allow_pickle=False)
+        _flush_and_sync(handle)
     os.replace(tmp, path)
 
 
@@ -138,6 +146,7 @@ def _write_text_atomic(path: Path, text: str) -> None:
     tmp = path.with_name("." + path.name + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="") as handle:
         handle.write(text)
+        _flush_and_sync(handle)
     os.replace(tmp, path)
 
 
