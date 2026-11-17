@@ -9,7 +9,7 @@ relicense them. Licenses were read from each package's metadata in the developme
 | Package | Version | License (as declared by the package) |
 |---|---|---|
 | mediapipe | 1.2.3 | Apache-2.0 |
-| opencv-contrib-python | 5.1.0.95 | Apache-2.0 |
+| opencv-contrib-python | 5.1.0.95 (Windows); 5.0.0.93 (Linux) | Apache-2.0 |
 | numpy | 2.4.6 | BSD-3-Clause and other permissive terms (see the package's license file) |
 | pandas | 3.1.1 | BSD-3-Clause |
 | streamlit | 1.67.0 | Apache-2.0 |

@@ -17,7 +17,7 @@ training is not implemented yet.
 | JSON and CSV export, one dataset per recording session | Implemented |
 | Motion analysis: head-pose compensation, neutral calibration, displacement, velocity, acceleration | Implemented |
 | Blink detection and tracking-quality metrics | Implemented |
-| Streamlit dashboard: people and sessions, add or process recordings, delete data, five pages | Implemented |
+| Streamlit dashboard: people and sessions, add or process recordings, delete data, six pages | Implemented |
 | Overwrite protection (`--force` for analysis, never for extraction) | Implemented |
 | Synthetic demo data generator | Implemented |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
@@ -155,6 +155,7 @@ can also upload a video and delete sessions or people (**Manage data**).
 | 03 Audio Analysis | Placeholder. Not implemented |
 | 04 Body Motion | Placeholder. Not implemented |
 | 05 Dataset Comparison | Compares the processed sessions of one person: summary, blendshape means, distributions, landmark stability |
+| 06 Diagnostics | Tracking checks, interruptions, neutral-frame selection, raw versus compensated landmarks, head rotation, displacement, velocity, acceleration |
 
 ![Facial analysis](docs/screenshots/facial_analysis.png)
 ![Dataset comparison](docs/screenshots/dataset_comparison.png)
@@ -188,7 +189,9 @@ frame,timestamp_ms,face_detected,jawOpen,mouthSmileLeft,...,eyeBlinkLeft,...
 ## Measurement notes and limitations
 
 The conventions, formulas, the empirical convention check and the limitations are documented in
-[docs/validation.md](docs/validation.md).
+[docs/validation.md](docs/validation.md). The head-pose axis-flip convention is **empirically
+supported** by three local sessions from two people. It is not an established MediaPipe guarantee
+and has not been checked against an independently measured head rotation.
 
 - **Head-pose compensation removes rotation only.** Translation and scale are not removed.
   Velocity and acceleration therefore measure shape change, not head movement.

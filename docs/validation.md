@@ -18,8 +18,13 @@ the head rotation (plus any scale). The translation column is not used.
 height differ.
 
 **Axis flip.** The image x-axis is mirrored relative to the matrix's rotation frame:
-`F = diag(-1, 1, 1)`. This was found empirically (section 3). It is not a documented MediaPipe
-guarantee, and it is the most important convention in this document.
+`F = diag(-1, 1, 1)`.
+
+**Status of this convention: empirically supported, not established.** The flip was chosen by a
+read-only study on three local sessions from two people (section 3). It is consistent across
+those sessions, but it is not a documented MediaPipe guarantee, and it has not been checked
+against a recording with a known, independently measured head rotation. Treat every result that
+depends on it as provisional until that check is done.
 
 ## 2. Formulas
 
@@ -50,7 +55,10 @@ least 0.5. The threshold has not been validated against manual annotation.
 decomposition. Their sign convention is not verified against an external reference, and it
 should be treated with care.
 
-## 3. Empirical check of the convention
+## 3. Empirical check of the convention (supported, not proven)
+
+Status: the convention is **empirically supported** by three local sessions. It is **not proven**
+for MediaPipe in general, because the sessions are few and the reference is internal.
 
 A read-only study on local sessions compared 128 sign and transpose combinations of the rotation,
 using calm frames only. Calm frames were selected as in section 2. The best candidate had
