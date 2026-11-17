@@ -327,6 +327,19 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class HeaderReadTests(SessionTestCase):
+    def test_header_reader_matches_the_array_on_disk(self):
+        path = self.tmp / "x.npy"
+        arr = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
+        np.save(path, arr)
+        self.assertEqual(w._npy_header(path), ((2, 3, 4), "float32"))
+
+    def test_writer_does_not_memory_map_outputs(self):
+        # Memory-mapped views can keep a file open, which blocks renames on Windows.
+        source = (ROOT / "src" / "analysis" / "session_writer_v2.py").read_text(encoding="utf-8")
+        self.assertNotIn("mmap_mode", source)
+
+
 class DurabilityTests(SessionTestCase):
     def test_every_written_file_is_flushed_to_disk_before_it_is_renamed(self):
         from unittest import mock

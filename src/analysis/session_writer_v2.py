@@ -113,6 +113,17 @@ def _rel_to_path(rel: str, root: Path) -> Path:
     return root.joinpath(*parts)
 
 
+def _npy_header(path: Path) -> tuple[tuple, str]:
+    """Shape and dtype read from the .npy header only. The file is opened and closed here."""
+    with Path(path).open("rb") as handle:
+        version = np.lib.format.read_magic(handle)
+        if version == (1, 0):
+            shape, _, dtype = np.lib.format.read_array_header_1_0(handle)
+        else:
+            shape, _, dtype = np.lib.format.read_array_header_2_0(handle)
+    return tuple(shape), str(dtype)
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -269,9 +280,9 @@ def _build_manifest(staging: Path, written: list[str], payload: V2Payload, fail_
         path = _rel_to_path(rel, staging)
         entry = {"path": rel, "bytes": path.stat().st_size, "sha256": _sha256(path)}
         if rel.endswith(".npy"):
-            arr = np.load(path, mmap_mode="r", allow_pickle=False)
-            entry["shape"] = list(arr.shape)
-            entry["dtype"] = str(arr.dtype)
+            shape, dtype = _npy_header(path)
+            entry["shape"] = list(shape)
+            entry["dtype"] = dtype
         entries.append(entry)
     _check_fail("manifest", fail_at)
     return {
@@ -305,8 +316,8 @@ def verify_manifest(root: Path, manifest: dict, check_unexpected: bool = False) 
             issues.append(f"checksum mismatch: {rel}")
         if "shape" in entry:
             try:
-                arr = np.load(path, mmap_mode="r", allow_pickle=False)
-                if list(arr.shape) != entry["shape"] or str(arr.dtype) != entry.get("dtype"):
+                shape, dtype = _npy_header(path)
+                if list(shape) != entry["shape"] or dtype != entry.get("dtype"):
                     issues.append(f"shape or dtype mismatch: {rel}")
             except (OSError, ValueError) as exc:
                 issues.append(f"unreadable array {rel}: {exc}")
