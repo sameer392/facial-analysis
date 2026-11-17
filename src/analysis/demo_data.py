@@ -56,19 +56,39 @@ def _geometry(t: float, spec: dict, index: int, n_frames: int):
     return centre, roll, yaw, jaw, blink
 
 
-def _landmarks(centre, roll, jaw, blink):
+def _rot_z(a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+
+
+def _rot_y(a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
+# Same convention as tests/test_scientific.py: the image x-axis is mirrored relative to the
+# matrix's rotation frame. This is the convention the compensation expects.
+_AXIS_FLIP = np.diag([-1.0, 1.0, 1.0])
+
+
+def _landmarks(centre, roll, yaw, jaw, blink):
+    """Canonical 3D face deformed by expression, rotated by the head pose, then projected.
+
+    Returns normalised landmarks (x / W, y / H, z / W) and the 3x3 rotation that produced them,
+    so the transformation matrix and the landmarks are consistent.
+    """
     rx, ry = 120.0, 165.0
-    x = centre[0] + rx * np.cos(_ANGLES)
-    y = centre[1] + ry * np.sin(_ANGLES)
+    x = rx * np.cos(_ANGLES)
+    y = ry * np.sin(_ANGLES)
     y = y + np.where(_LOWER, 45.0 * jaw, 0.0)  # lower lip and chin drop when the jaw opens
     squeeze = 1.0 - 0.85 * blink
-    y = np.where(_EYES, centre[1] - 45 + (y - (centre[1] - 45)) * squeeze, y)
-    # rotate about the centre for head roll
-    dx, dy = x - centre[0], y - centre[1]
-    x = centre[0] + dx * math.cos(roll) - dy * math.sin(roll)
-    y = centre[1] + dx * math.sin(roll) + dy * math.cos(roll)
-    z = 0.02 * np.cos(_ANGLES)
-    return np.stack([x / WIDTH, y / HEIGHT, z], axis=1)
+    y = np.where(_EYES, -45 + (y + 45) * squeeze, y)
+    z = 40.0 * np.cos(_ANGLES) * np.sin(_ANGLES)
+    canonical = np.stack([x, y, z], axis=1)
+    R = _rot_z(roll) @ _rot_y(yaw)
+    iso = (canonical @ R.T) @ _AXIS_FLIP + np.array([centre[0], centre[1], 0.0])
+    normalised = np.stack([iso[:, 0] / WIDTH, iso[:, 1] / HEIGHT, iso[:, 2] / WIDTH], axis=1)
+    return normalised, R
 
 
 def _draw(frame_bgr: np.ndarray, centre, roll, jaw, blink, label: str) -> None:
@@ -99,12 +119,9 @@ def _blendshapes(jaw: float, blink: float, index: int) -> dict:
     }
 
 
-def _matrix(roll: float, yaw: float) -> list[list[float]]:
-    cr, sr, cy, sy = math.cos(roll), math.sin(roll), math.cos(yaw), math.sin(yaw)
-    rz = np.array([[cr, -sr, 0], [sr, cr, 0], [0, 0, 1]])
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+def _matrix(R: np.ndarray) -> list[list[float]]:
     m = np.eye(4)
-    m[:3, :3] = rz @ ry
+    m[:3, :3] = R
     return m.round(6).tolist()
 
 
@@ -128,14 +145,14 @@ def generate_session(home: Path, session_id: str, spec: dict) -> dict:
         frame = {"frame": i, "timestamp_ms": timestamp_ms, "face_detected": detected}
         blend = {}
         if detected:
-            pts = _landmarks(centre, roll, jaw, blink)
+            pts, R = _landmarks(centre, roll, yaw, jaw, blink)
             frame["landmarks"] = [
                 {"id": k, "x": round(float(x), 6), "y": round(float(y), 6), "z": round(float(z), 6)}
                 for k, (x, y, z) in enumerate(pts)
             ]
             blend = _blendshapes(jaw, blink, i)
             frame["blendshapes"] = {k: round(v, 6) for k, v in blend.items()}
-            frame["transformation_matrix"] = _matrix(roll, yaw)
+            frame["transformation_matrix"] = _matrix(R)
         frames.append(frame)
         rows.append({"frame": i, "timestamp_ms": timestamp_ms, "face_detected": detected, **blend})
     writer.release()

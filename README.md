@@ -187,6 +187,9 @@ frame,timestamp_ms,face_detected,jawOpen,mouthSmileLeft,...,eyeBlinkLeft,...
 
 ## Measurement notes and limitations
 
+The conventions, formulas, the empirical convention check and the limitations are documented in
+[docs/validation.md](docs/validation.md).
+
 - **Head-pose compensation removes rotation only.** Translation and scale are not removed.
   Velocity and acceleration therefore measure shape change, not head movement.
 - **Neutral-face calibration** uses the 10% of tracked frames with the least mouth, jaw, eye
@@ -203,8 +206,12 @@ frame,timestamp_ms,face_detected,jawOpen,mouthSmileLeft,...,eyeBlinkLeft,...
 ## Tests
 
 ```powershell
-python -m unittest tests.test_fixtures tests.test_regression -v
+python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific -v
 ```
+
+- `tests/test_scientific.py` checks head-pose compensation against known rotations, translations,
+  scales and aspect ratios, and checks motion metrics against known movements (including
+  irregular timestamps). See [docs/validation.md](docs/validation.md).
 
 - `tests/test_fixtures.py` builds temporary synthetic sessions. It covers JSON loading, CSV
   generation, landmark and timestamp validation, dataset loading, overwrite protection and

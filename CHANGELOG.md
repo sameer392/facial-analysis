@@ -32,6 +32,23 @@ All notable changes to this project are recorded here. The format follows
 ### Fixed
 - `opencv-python` and `opencv-contrib-python` were installed together, which conflicts.
 - Analysis and extraction could leave partially written files if interrupted.
+- Head-pose compensation used distorted normalised coordinates and no axis flip. It was worse
+  than no compensation in two of three local sessions. It now converts to pixel-proportional
+  units, uses the nearest proper rotation of the matrix, applies the axis flip, and normalises scale.
+  See `docs/validation.md`.
+- Acceleration divided by one time step, which is wrong for irregular timestamps. It now uses
+  the time between velocity midpoints.
+- Synthetic demo landmarks rotated in 2D while the matrix recorded 3D rotation. The demo now
+  uses one consistent model.
+
+### Added (validation)
+- `tests/test_scientific.py`: known rotations, translations, scale, missing matrices, aspect
+  ratio, axis flip, neutral calibration, and motion metrics on regular and irregular timestamps.
+- `docs/validation.md`: conventions, formulas, the empirical convention check, and limitations.
+- Dashboard page `06_Diagnostics`: tracking checks, interruptions, neutral-frame selection,
+  raw versus compensated landmarks, head rotation, displacement, velocity and acceleration.
+- `tracking_quality.json` reports interruptions, landmark completeness, matrix availability on
+  detected frames, and timestamp issues. It states that these are tracking checks only.
 
 ### Not yet implemented
 - Audio feature extraction (dashboard page is a placeholder).

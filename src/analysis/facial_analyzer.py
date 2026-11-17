@@ -25,6 +25,7 @@ from facial_3d_analyzer import head_pose_angles
 from file_safety import OutputExistsError, atomic_write_csv, atomic_write_text, check_writable
 from motion_analyzer import (
     ACTIVITY_PREFIXES,
+    AXIS_FLIP,
     compensate_head_pose,
     landmark_kinematics,
     neutral_frame_mask,
@@ -51,6 +52,15 @@ class Session:
     video_path: Path
     dataset_dir: Path
     fps: float
+    frame_width: int | None = None
+    frame_height: int | None = None
+
+    @property
+    def frame_size(self):
+        """(width, height) in pixels, or (1, 1) when the video is unavailable (square pixels assumed)."""
+        if self.frame_width and self.frame_height:
+            return (self.frame_width, self.frame_height)
+        return (1, 1)
 
     @property
     def json_path(self) -> Path:
@@ -81,22 +91,34 @@ class SessionAnalysis:
     compensated: np.ndarray       # (T, 478, 3) head-pose compensated landmarks
 
 
-def video_fps(video_path: Path) -> float:
+def video_properties(video_path: Path):
+    """(fps, width, height) from the video, or None values when the file is missing."""
     if not video_path.is_file():
-        return DEFAULT_FPS
+        return DEFAULT_FPS, None, None
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
-    return float(fps) if fps and fps > 0 else DEFAULT_FPS
+    fps = float(fps) if fps and fps > 0 else DEFAULT_FPS
+    return fps, (width or None), (height or None)
+
+
+def video_fps(video_path: Path) -> float:
+    return video_properties(video_path)[0]
 
 
 def make_session(person: str, session_id: str) -> Session:
+    video = session_video(person, session_id)
+    fps, width, height = video_properties(video)
     return Session(
         person=person,
         session_id=session_id,
-        video_path=session_video(person, session_id),
+        video_path=video,
         dataset_dir=session_dataset_dir(person, session_id),
-        fps=video_fps(session_video(person, session_id)),
+        fps=fps,
+        frame_width=width,
+        frame_height=height,
     )
 
 
@@ -168,23 +190,57 @@ def _longest_run(mask: np.ndarray) -> int:
     return best
 
 
+def tracking_interruptions(detected: np.ndarray) -> list[dict]:
+    """Runs of consecutive frames without a face."""
+    runs = []
+    start = None
+    for i, found in enumerate(np.append(detected, True)):
+        if not found and start is None:
+            start = i
+        elif found and start is not None:
+            runs.append({"start_frame": start, "end_frame": i - 1, "length_frames": i - start})
+            start = None
+    return runs
+
+
 def tracking_quality(ds: FacialDataset) -> dict:
-    """Summarise how reliably the face was tracked in this session."""
+    """Tracking quality only: how reliably the face was found and described.
+
+    These numbers say nothing about whether the measured movement is accurate. A session can
+    score 100 here and still have a poor head-pose estimate or noisy landmarks.
+    """
+    from validation import N_LANDMARKS, validate_timestamps
+
     detected = ds.detected
+    n = len(detected)
     usable_matrix = np.isfinite(ds.matrices).all(axis=(1, 2))
     both = detected[1:] & detected[:-1]
     steps = np.linalg.norm(np.diff(ds.landmarks, axis=0), axis=2)  # (T-1, 478)
     jitter = float(np.nanmedian(steps[both])) if both.any() else float("nan")
-    detection_rate = float(detected.mean()) if len(detected) else 0.0
-    matrix_rate = float(usable_matrix.mean()) if len(detected) else 0.0
+    detection_rate = float(detected.mean()) if n else 0.0
+    matrix_rate = float(usable_matrix.mean()) if n else 0.0
+    detected_count = int(detected.sum())
+    complete = np.isfinite(ds.landmarks).all(axis=(1, 2)) & detected
+    completeness = float(complete.sum() / detected_count) if detected_count else float("nan")
+    matrix_on_detected = float((usable_matrix & detected).sum() / detected_count) if detected_count else float("nan")
+    interruptions = tracking_interruptions(detected)
+    timestamp_issues = validate_timestamps(list(ds.timestamps_s * 1000.0), ds.session.fps)
     return {
         "session_id": ds.session.session_id,
-        "frames": int(len(detected)),
+        "frames": int(n),
         "detection_rate": round(detection_rate, 4),
         "transform_matrix_rate": round(matrix_rate, 4),
         "longest_missing_run_frames": _longest_run(~detected),
         "median_landmark_jitter": jitter,
         "quality_score": round(100.0 * detection_rate * matrix_rate, 1),
+        "landmark_completeness_on_detected": round(completeness, 4),
+        "transform_matrix_on_detected": round(matrix_on_detected, 4),
+        "expected_landmarks_per_face": N_LANDMARKS,
+        "interruption_count": len(interruptions),
+        "interruptions": interruptions,
+        "timestamp_issues": timestamp_issues,
+        "frame_size_known": bool(ds.session.frame_width and ds.session.frame_height),
+        "scope": "tracking only; does not measure the accuracy of the facial motion",
     }
 
 
@@ -192,7 +248,7 @@ def analyse_session(session: Session) -> SessionAnalysis:
     ds = load_session(session)
     T = len(ds.timestamps_s)
 
-    compensated = compensate_head_pose(ds.landmarks, ds.matrices)
+    compensated = compensate_head_pose(ds.landmarks, ds.matrices, session.frame_size)
     usable = np.isfinite(compensated).all(axis=(1, 2))
     mask = neutral_frame_mask(ds.blendshapes, usable)
     neutral = neutral_shape(compensated, mask)
@@ -222,6 +278,7 @@ def analyse_session(session: Session) -> SessionAnalysis:
         "jaw_open": column("jawOpen"),
         "mouth_activity": ds.blendshapes[activity_cols].sum(axis=1).to_numpy() if activity_cols else np.nan,
         "eye_blink": blink_score(ds.blendshapes).to_numpy(),
+        "is_neutral": mask,
         "brow_inner_up": column("browInnerUp"),
         "yaw_deg": angles["yaw_deg"].to_numpy(),
         "pitch_deg": angles["pitch_deg"].to_numpy(),
@@ -264,7 +321,10 @@ def save_session_outputs(analysis: SessionAnalysis, session: Session, force: boo
         "session_id": analysis.session_id,
         "neutral_frames": analysis.neutral_frames,
         "method": "lowest 10% of mouth/jaw/eye/brow activity among tracked frames",
-        "head_pose": "rotation removed per frame; translation and scale ignored",
+        "head_pose": ("rotation removed with the transformation matrix (nearest proper rotation, "
+                      "axis flip x); translation removed by centring; scale removed by RMS normalisation; "
+                      "x and z scaled by frame width and y by frame height before rotation"),
+        "axis_flip": AXIS_FLIP.diagonal().tolist(),
     }, indent=2))
     return out
 

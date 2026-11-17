@@ -113,24 +113,9 @@ class DeletionTests(unittest.TestCase):
 
 
 class SyntheticMotionTests(unittest.TestCase):
-    def test_identity_rotation_only_centres_the_face(self):
-        pts = np.random.default_rng(0).random((1, 478, 3))
-        out = compensate_head_pose(pts, np.tile(np.eye(4), (1, 1, 1)))
-        np.testing.assert_allclose(out[0], pts[0] - pts[0].mean(axis=0), atol=1e-12)
-
-    def test_head_rotation_is_removed(self):
-        rng = np.random.default_rng(1)
-        base = rng.random((478, 3))
-        R = rotation_z(0.4)
-        rotated = base @ R.T  # what the camera sees after the head turns
-        matrix = np.eye(4)
-        matrix[:3, :3] = R
-        out = compensate_head_pose(rotated[None], matrix[None])
-        np.testing.assert_allclose(out[0], base - base.mean(axis=0), atol=1e-10)
-
     def test_missing_matrix_gives_nan(self):
         pts = np.random.default_rng(2).random((2, 478, 3))
-        out = compensate_head_pose(pts, np.full((2, 4, 4), np.nan))
+        out = compensate_head_pose(pts, np.full((2, 4, 4), np.nan), (640, 480))
         self.assertTrue(np.isnan(out).all())
 
     def test_constant_motion_gives_constant_velocity_and_zero_acceleration(self):
@@ -254,7 +239,7 @@ class DashboardRunTests(unittest.TestCase):
 
     def test_all_pages_run(self):
         pages = sorted((DASHBOARD_DIR / "pages").glob("*.py"))
-        self.assertEqual(len(pages), 5)
+        self.assertEqual(len(pages), 6)
         for page in pages:
             with self.subTest(page=page.name):
                 self._run(page)
