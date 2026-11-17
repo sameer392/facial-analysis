@@ -7,9 +7,14 @@
 # All scripts import cv2 normally, so nothing else changes.
 #
 # Versions are the ones the project was developed and tested with (Windows 11).
+#
+# OpenCV version differs by platform because 5.1.0.95 has no Linux wheel on PyPI.
+# Linux uses 5.0.0.93, which has a manylinux x86_64 wheel. macOS is not supported yet
+# (5.1.0.95 only has macOS 15 wheels; not tested).
 
 mediapipe==1.2.3
-opencv-contrib-python==5.1.0.95
+opencv-contrib-python==5.1.0.95; sys_platform == "win32"
+opencv-contrib-python==5.0.0.93; sys_platform == "linux"
 numpy==2.4.6
 pandas==3.1.1
 streamlit==1.67.0
