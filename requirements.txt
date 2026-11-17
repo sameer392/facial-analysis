@@ -1,8 +1,15 @@
-# Facial extraction, analysis and dashboard
-# Versions match the working .venv used for the existing presenter-01 and presenter-02 datasets.
+# Python 3.11 is the supported version.
+#
+# Install with:  pip install -r requirements.txt
+#
+# opencv-contrib-python is installed instead of opencv-python. MediaPipe depends on
+# the contrib build, and installing both packages causes conflicts in cv2.
+# All scripts import cv2 normally, so nothing else changes.
+#
+# Versions are the ones the project was developed and tested with (Windows 11).
 
 mediapipe==1.2.3
-opencv-python==5.0.0.93
+opencv-contrib-python==5.1.0.95
 numpy==2.4.6
 pandas==3.1.1
 streamlit==1.67.0
