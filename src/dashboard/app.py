@@ -1,4 +1,4 @@
-import json
+﻿import json
 import subprocess
 import sys
 from pathlib import Path
@@ -32,7 +32,7 @@ from project_paths import (  # noqa: E402
 
 st.set_page_config(
     page_title="Personal Facial Motion Analyzer",
-    page_icon="🎭",
+    page_icon="ðŸŽ­",
     layout="wide",
 )
 
@@ -67,7 +67,7 @@ if "upload_message" in st.session_state:
 with st.sidebar:
     st.header("Person / project")
     with st.expander("Create a new person or project", expanded=not list_persons()):
-        new_person_raw = st.text_input("Name", placeholder="e.g. sameer_gupta or my-project")
+        new_person_raw = st.text_input("Name", placeholder="e.g. demo_person or my-project")
         if st.button("Create folder"):
             name = suggest_person(new_person_raw)
             if not is_valid_person(name):

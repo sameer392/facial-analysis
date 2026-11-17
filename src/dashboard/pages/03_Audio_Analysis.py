@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 import streamlit as st
 
@@ -15,8 +15,8 @@ if not EXTRACTOR.is_file():
         "frames once src/extraction/audio_extractor.py exists."
     )
     st.markdown(
-        "**Needed next:** an audio extractor that reads each session's `recordings/raw/presenter-0N.mp4`, "
-        "writes features keyed by `session_id` into `datasets/sameer_gupta/normalized/<session-id>/`, "
+        "**Needed next:** an audio extractor that reads each session's `recordings/raw/<person>/session-NNN.mp4`, "
+        "writes features keyed by session into `datasets/<person>/<session>/`, "
         "and aligns them to the video frame timestamps."
     )
 else:

@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -70,5 +70,5 @@ st.plotly_chart(
 
 st.caption(
     "Velocity and acceleration are computed from head-pose compensated landmarks. Translation and scale are not "
-    "compensated, so these are shape-change measures. Derived files are in datasets/sameer_gupta/normalized/."
+    "compensated, so these are shape-change measures. Derived files are in datasets/<person>/<session>/."
 )
