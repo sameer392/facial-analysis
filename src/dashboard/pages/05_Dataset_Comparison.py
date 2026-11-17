@@ -7,6 +7,9 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
+from dashboard_bootstrap import reload_project_modules  # noqa: E402
+reload_project_modules()
+
 from common import cached_analysis, cached_dataset, persons_with_data  # noqa: E402
 from project_paths import list_processed_sessions, session_video  # noqa: E402
 from visualization import bar_figure, box_figure, distribution_figure  # noqa: E402

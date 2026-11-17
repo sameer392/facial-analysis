@@ -8,6 +8,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from dashboard_bootstrap import reload_project_modules  # noqa: E402
+reload_project_modules()  # pick up edits to helper modules without restarting the server
+
 from common import select_person_and_session  # noqa: E402  (sets up sys.path for analysis modules)
 from project_paths import (  # noqa: E402
     PROJECT_ROOT,

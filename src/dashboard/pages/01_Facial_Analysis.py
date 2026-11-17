@@ -5,6 +5,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st  # noqa: E402
 
+from dashboard_bootstrap import reload_project_modules  # noqa: E402
+reload_project_modules()
+
 from common import cached_analysis, select_person_and_session  # noqa: E402
 from visualization import blink_timeline_figure, line_figure  # noqa: E402
 
