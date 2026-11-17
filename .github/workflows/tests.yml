@@ -1,4 +1,4 @@
-name: Tests
+﻿name: Tests
 
 on:
   push:
@@ -36,4 +36,4 @@ jobs:
       - name: Run tests
         # Personal recordings and datasets are never in the repository, so CI runs on
         # synthetic fixtures and skips checks that need local data.
-        run: python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific -v
+        run: python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 -v
