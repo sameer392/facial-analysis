@@ -13,6 +13,7 @@ models/**
 datasets/
 recordings/raw/*.mp4
 recordings/processed/*
+!recordings/processed/.gitkeep
 checkpoints/*
 !checkpoints/.gitkeep
 logs/*
