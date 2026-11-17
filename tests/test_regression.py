@@ -1,4 +1,4 @@
-"""Regression tests for the facial analysis project.
+﻿"""Regression tests for the facial analysis project.
 
 Run from the project root with the project's virtual environment:
     python -m unittest tests.test_regression -v
@@ -44,21 +44,21 @@ class NamingTests(unittest.TestCase):
         self.assertFalse(pp.is_valid_session("../session-001"))
 
     def test_person_names(self):
-        self.assertTrue(pp.is_valid_person("sameer_gupta"))
+        self.assertTrue(pp.is_valid_person("demo_person"))
         self.assertTrue(pp.is_valid_person("my-project-2"))
-        self.assertFalse(pp.is_valid_person("Sameer Gupta"))
+        self.assertFalse(pp.is_valid_person("Demo Person"))
         self.assertFalse(pp.is_valid_person("../etc"))
         self.assertFalse(pp.is_valid_person(""))
 
     def test_suggest_person(self):
         self.assertEqual(pp.suggest_person("My Project 2"), "my-project-2")
-        self.assertEqual(pp.suggest_person("  Sameer_Gupta!! "), "sameer_gupta")
+        self.assertEqual(pp.suggest_person("  demo_person!! "), "demo_person")
 
     def test_session_paths_follow_layout(self):
-        video = pp.session_video("sameer_gupta", "session-001")
-        dataset = pp.session_dataset_dir("sameer_gupta", "session-001")
-        self.assertEqual(video.parts[-3:], ("raw", "sameer_gupta", "session-001.mp4"))
-        self.assertEqual(dataset.parts[-3:], ("datasets", "sameer_gupta", "session-001"))
+        video = pp.session_video("demo_person", "session-001")
+        dataset = pp.session_dataset_dir("demo_person", "session-001")
+        self.assertEqual(video.parts[-3:], ("raw", "demo_person", "session-001.mp4"))
+        self.assertEqual(dataset.parts[-3:], ("datasets", "demo_person", "session-001"))
 
 
 class DeletionTests(unittest.TestCase):
