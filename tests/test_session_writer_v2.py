@@ -327,6 +327,46 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class RecoverySafetyTests(SessionTestCase):
+    def _interrupted_publish(self):
+        with self.assertRaises(w.SimulatedInterruption):
+            w.write_v2_session(self.session, make_payload(), fail_at="publish")
+
+    def test_recovery_refuses_a_corrupt_manifest_and_deletes_nothing(self):
+        self._interrupted_publish()
+        (self.session / "manifest.json").write_text("{corrupt", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.recover_incomplete_v2(self.session)
+        self.assertTrue((self.session / "manifest.json").is_file())
+        self.assertTrue((self.session / "facial" / "landmarks.npy").is_file())
+        self.assert_v1_unchanged()
+
+    def test_recovery_refuses_a_manifest_that_lists_a_version_1_file(self):
+        self._interrupted_publish()
+        manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
+        manifest["files"].append({"path": "facial_data.json", "bytes": 1, "sha256": "0" * 64})
+        (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.recover_incomplete_v2(self.session)
+        self.assert_v1_unchanged()
+
+    def test_recovery_refuses_to_delete_a_modified_file(self):
+        self._interrupted_publish()
+        (self.session / "timeline.csv").write_text("edited by hand\n", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.recover_incomplete_v2(self.session)
+        self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "edited by hand\n")
+
+    def test_rollback_refuses_a_manifest_that_lists_a_version_1_file(self):
+        w.write_v2_session(self.session, make_payload())
+        manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
+        manifest["files"].append({"path": "calibration.json", "bytes": 1, "sha256": "0" * 64})
+        (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.rollback_v2(self.session)
+        self.assert_v1_unchanged()
+
+
 class HeaderReadTests(SessionTestCase):
     def test_header_reader_matches_the_array_on_disk(self):
         path = self.tmp / "x.npy"

@@ -506,13 +506,14 @@ def recover_incomplete_v2(session_dir) -> list[str]:
     manifest_path = session / MANIFEST_FILE
     if manifest_path.is_file():
         manifest = _load_manifest(manifest_path)
-        if manifest is not None:
-            for entry in manifest.get("files", []):
-                rel = entry.get("path", "")
-                path = _rel_to_path(rel, session)
-                if path.is_file():
-                    path.unlink()
-                    actions.append(f"removed interrupted file {rel}")
+        if manifest is None:
+            raise V2Error("manifest.json is unreadable; nothing was removed. Check the folder by hand.")
+        _check_before_removal(session, manifest)
+        for entry in manifest.get("files", []):
+            path = _rel_to_path(entry["path"], session)
+            if path.is_file():
+                path.unlink()
+                actions.append(f"removed interrupted file {entry['path']}")
         manifest_path.unlink()
         actions.append(f"removed {MANIFEST_FILE}")
         _remove_empty_v2_dirs(session)
@@ -533,10 +534,7 @@ def rollback_v2(session_dir) -> list[str]:
     manifest = _load_manifest(session / MANIFEST_FILE)
     if manifest is None:
         raise V2Error("no readable manifest: nothing to roll back safely")
-    issues = verify_manifest(session, manifest)
-    changed = [i for i in issues if i.startswith("checksum mismatch") or i.startswith("size mismatch")]
-    if changed:
-        raise V2Error("refusing to roll back modified files: " + "; ".join(changed))
+    _check_before_removal(session, manifest)
 
     actions = []
     for entry in manifest["files"]:
@@ -553,6 +551,31 @@ def rollback_v2(session_dir) -> list[str]:
         _restore_previous(session, previous)
         actions.append(f"restored previous version 2 dataset from {previous.name}")
     return actions
+
+
+def _check_before_removal(session: Path, manifest: dict) -> None:
+    """Refuse to remove anything unless the manifest is sound and every present file still matches it.
+
+    Raises V2Error and removes nothing when: the manifest fails validation, lists a version 1 name,
+    or any listed file exists with a different size or checksum (it was edited after publication).
+    """
+    issues = validate_manifest(manifest)
+    for entry in manifest.get("files", []):
+        rel = entry.get("path", "")
+        if rel in V1_PROTECTED_NAMES or rel.split("/")[0] in V1_PROTECTED_NAMES:
+            issues.append(f"manifest lists a version 1 file: {rel}")
+    changed = []
+    for entry in manifest.get("files", []):
+        try:
+            path = _rel_to_path(entry.get("path", ""), session)
+        except V2ValidationError:
+            continue  # already reported by validate_manifest
+        if path.is_file() and (path.stat().st_size != entry.get("bytes") or _sha256(path) != entry.get("sha256")):
+            changed.append(entry["path"])
+    if changed:
+        issues.append("files changed since publication: " + ", ".join(changed))
+    if issues:
+        raise V2Error("refusing to remove anything: " + "; ".join(issues))
 
 
 def _remove_empty_v2_dirs(session: Path) -> None:
