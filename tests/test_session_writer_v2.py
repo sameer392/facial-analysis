@@ -327,6 +327,26 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class PostPublicationTests(SessionTestCase):
+    def test_damage_during_publication_is_caught_before_metadata_is_written(self):
+        from unittest import mock
+
+        real_replace = w.os.replace
+
+        def damaging_replace(src, dst):
+            real_replace(src, dst)
+            in_session = not any(part.startswith(w.STAGING_PREFIX) for part in Path(dst).parts)
+            if in_session and Path(dst).name == "landmarks.npy":
+                Path(dst).write_bytes(b"damaged")
+
+        with mock.patch.object(w.os, "replace", side_effect=damaging_replace):
+            with self.assertRaises(w.V2Error):
+                w.write_v2_session(self.session, make_payload())
+        self.assertFalse((self.session / "metadata.json").exists())
+        self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
+        self.assert_v1_unchanged()
+
+
 class RecoverySafetyTests(SessionTestCase):
     def _interrupted_publish(self):
         with self.assertRaises(w.SimulatedInterruption):

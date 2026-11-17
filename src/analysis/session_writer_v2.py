@@ -403,6 +403,11 @@ def _publish(session: Path, staging: Path, manifest: dict, fail_at: str | None) 
         os.replace(_rel_to_path(rel, staging), dest)
         if fail_at == "publish" and i == 1:
             raise SimulatedInterruption("publish")
+    # Check what is now in the session folder against the manifest. Damage here means the
+    # session stays incomplete, so readers never see it as complete.
+    issues = verify_manifest(session, manifest)
+    if issues:
+        raise V2Error("post-publication verification failed: " + "; ".join(issues))
     _check_fail("metadata", fail_at)
     os.replace(staging / METADATA_FILE, session / METADATA_FILE)
 
