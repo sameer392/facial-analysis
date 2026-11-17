@@ -1,0 +1,19 @@
+﻿# Virtual environment (not committed)
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large generated data (keep folders via .gitkeep)
+models/**
+!models/**/
+!models/**/.gitkeep
+# Generated datasets (created locally by extract_faces.py)
+datasets/
+recordings/raw/*.mp4
+recordings/processed/*
+checkpoints/*
+!checkpoints/.gitkeep
+logs/*
+!logs/.gitkeep

@@ -1,0 +1,9 @@
+# Facial extraction, analysis and dashboard
+# Versions match the working .venv used for the existing presenter-01 and presenter-02 datasets.
+
+mediapipe==1.2.3
+opencv-python==5.0.0.93
+numpy==2.4.6
+pandas==3.1.1
+streamlit==1.67.0
+plotly==7.1.0
