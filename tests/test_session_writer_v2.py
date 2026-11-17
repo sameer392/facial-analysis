@@ -327,6 +327,36 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class LockTests(SessionTestCase):
+    def test_second_writer_is_refused_while_lock_is_held(self):
+        (self.session / w.LOCK_FILE).write_text("12345", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.write_v2_session(self.session, make_payload())
+        self.assertTrue((self.session / w.LOCK_FILE).is_file())
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+
+    def test_lock_is_released_after_success(self):
+        w.write_v2_session(self.session, make_payload())
+        self.assertFalse((self.session / w.LOCK_FILE).exists())
+
+    def test_lock_is_released_after_an_ordinary_error(self):
+        from unittest import mock
+
+        with mock.patch.object(w, "_build_manifest", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                w.write_v2_session(self.session, make_payload())
+        self.assertFalse((self.session / w.LOCK_FILE).exists())
+
+    def test_crash_leaves_lock_and_recovery_clears_it(self):
+        with self.assertRaises(w.SimulatedInterruption):
+            w.write_v2_session(self.session, make_payload(), fail_at="publish")
+        self.assertTrue((self.session / w.LOCK_FILE).is_file())
+        w.recover_incomplete_v2(self.session)
+        self.assertFalse((self.session / w.LOCK_FILE).exists())
+        w.write_v2_session(self.session, make_payload())
+        self.assertEqual(s2.session_layout(self.session), "v2")
+
+
 class VersionOneNameTests(unittest.TestCase):
     def test_only_root_level_version_one_names_are_protected(self):
         self.assertTrue(w.is_v1_path("facial_data.json"))

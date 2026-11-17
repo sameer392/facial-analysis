@@ -48,6 +48,7 @@ from schema_v2 import (
 )
 
 STAGING_PREFIX = ".v2-staging-"
+LOCK_FILE = ".v2-lock"
 PREVIOUS_PREFIX = ".v2-previous-"
 MANIFEST_VERSION = 1
 
@@ -419,8 +420,42 @@ def _publish(session: Path, staging: Path, manifest: dict, fail_at: str | None) 
 
 # ---------------------------------------------------------------- public operations
 
+def _acquire_lock(session: Path) -> Path:
+    """Create the lock file exclusively. A second writer, or a crashed one, leaves it in place."""
+    lock = session / LOCK_FILE
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        raise V2Error(f"another version 2 operation holds {lock}. If none is running, "
+                      "run recover_incomplete_v2 for this session.")
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(f"pid={os.getpid()}\n")
+    return lock
+
+
+def _release_lock(session: Path) -> None:
+    (session / LOCK_FILE).unlink(missing_ok=True)
+
+
 def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
                      fail_at: str | None = None) -> dict:
+    """Write one version 2 session under an exclusive lock. See _write_locked for the steps."""
+    session = Path(session_dir)
+    session.mkdir(parents=True, exist_ok=True)
+    _acquire_lock(session)
+    try:
+        manifest = _write_locked(session, payload, regenerate, fail_at)
+    except SimulatedInterruption:
+        raise  # a crash leaves the lock behind, so recovery knows the operation did not finish
+    except BaseException:
+        _release_lock(session)
+        raise
+    _release_lock(session)
+    return manifest
+
+
+def _write_locked(session_dir, payload: V2Payload, regenerate: bool = False,
+                  fail_at: str | None = None) -> dict:
     """Write one version 2 session. Returns the published manifest.
 
     regenerate=False raises V2ExistsError when a complete version 2 dataset already exists.
@@ -434,7 +469,7 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
 
     layout = session_layout(session)
     if layout == "incomplete_v2":
-        recover_incomplete_v2(session)
+        _recover_files(session)  # not recover_incomplete_v2: that would remove our own lock
         layout = session_layout(session)
     if layout == "v2" and not regenerate:
         raise V2ExistsError(f"complete version 2 dataset exists: {session}. Use regenerate=True (--regenerate-v2).")
@@ -505,6 +540,16 @@ def recover_incomplete_v2(session_dir) -> list[str]:
     Returns the list of actions taken.
     """
     session = Path(session_dir)
+    actions = []
+    if (session / LOCK_FILE).is_file():
+        # Call this only when no operation is running: it clears the lock a crash left behind.
+        (session / LOCK_FILE).unlink()
+        actions.append(f"removed stale lock {LOCK_FILE}")
+    return actions + _recover_files(session)
+
+
+def _recover_files(session: Path) -> list[str]:
+    """Remove leftovers of an unfinished operation. Does not touch the lock file."""
     actions = []
     for staging in _staging_dirs(session):
         shutil.rmtree(staging, ignore_errors=True)
