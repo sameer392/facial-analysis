@@ -1,51 +1,57 @@
-import json
-import sys
-from pathlib import Path
+"""Write the blendshape table and motion/quality outputs for one session.
+
+Usage: python src/analysis/analyze_faces.py <person> <session>
+Example: python src/analysis/analyze_faces.py sameer_gupta session-001
+
+Requires extract_faces.py to have produced datasets/<person>/<session>/facial_data.json.
+Writes into datasets/<person>/<session>/ and refreshes datasets/<person>/dataset_metadata.json.
+"""
+
+import argparse
 
 import pandas as pd
 
+from facial_analyzer import (
+    analyse_session,
+    load_session,
+    make_session,
+    save_session_outputs,
+    write_person_metadata,
+)
+from project_paths import is_valid_person, is_valid_session, session_dataset_dir
 
-# ---------------------------------------------------------------------------
-# Recording to process. Pass an ID on the command line, e.g. "python analyze_faces.py presenter-02",
-# or change the default below.
-VIDEO_ID = sys.argv[1] if len(sys.argv) > 1 else "presenter-01"
-# ---------------------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DATASET_DIR = PROJECT_ROOT / "datasets" / VIDEO_ID
+def build_blendshape_table(ds) -> pd.DataFrame:
+    meta = pd.DataFrame({
+        "frame": range(len(ds.timestamps_s)),
+        "timestamp_ms": [round(t * 1000) for t in ds.timestamps_s],
+        "face_detected": ds.detected,
+    })
+    return pd.concat([meta, ds.blendshapes.reset_index(drop=True)], axis=1)
 
-INPUT = DATASET_DIR / "facial_data.json"
-OUTPUT = DATASET_DIR / "facial_blendshapes.csv"
 
-if not INPUT.is_file():
-    raise FileNotFoundError(f"Landmark data not found: {INPUT}")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Write blendshape CSV and motion outputs for one session.")
+    parser.add_argument("person", help="Person or project folder, e.g. sameer_gupta")
+    parser.add_argument("session", help="Session ID, e.g. session-001")
+    args = parser.parse_args()
 
-with INPUT.open("r", encoding="utf-8") as f:
-    data = json.load(f)
+    if not is_valid_person(args.person):
+        parser.error(f"Invalid person/project name: {args.person}")
+    if not is_valid_session(args.session):
+        parser.error(f"Invalid session ID (expected session-NNN): {args.session}")
 
-rows = []
+    session = make_session(args.person, args.session)
+    if not session.json_path.is_file():
+        raise SystemExit(f"Missing {session.json_path}. Run extract_faces.py first.")
 
-for frame in data:
+    ds = load_session(session)
+    csv_path = session_dataset_dir(args.person, args.session) / "facial_blendshapes.csv"
+    build_blendshape_table(ds).to_csv(csv_path, index=False)
+    print("CSV created:", csv_path)
+    print("Total frames:", len(ds.timestamps_s))
 
-    row = {
-        "frame": frame["frame"],
-        "timestamp_ms": frame["timestamp_ms"],
-        "face_detected": frame["face_detected"]
-    }
-
-    # Extract facial blendshape scores
-    blendshapes = frame.get("blendshapes", {})
-
-    for name, score in blendshapes.items():
-        row[name] = score
-
-    rows.append(row)
-
-df = pd.DataFrame(rows)
-
-OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-df.to_csv(OUTPUT, index=False)
-
-print("Video:", VIDEO_ID)
-print("CSV created:", OUTPUT)
-print("Total frames:", len(df))
+    result = analyse_session(session)
+    out = save_session_outputs(result, session)
+    print("Motion outputs:", out)
+    print("Metadata:", write_person_metadata(args.person))

@@ -3,28 +3,38 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import pandas as pd
+import argparse
 import json
-import os
-import sys
-from pathlib import Path
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from project_paths import MODEL_PATH, is_valid_person, is_valid_session, session_dataset_dir, session_video
 
-# ---------------------------------------------------------------------------
-# Recording to extract. Pass an ID on the command line, e.g. "python extract_faces.py presenter-02",
-# or change the default below.
-VIDEO_ID = sys.argv[1] if len(sys.argv) > 1 else "presenter-01"
-# ---------------------------------------------------------------------------
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Usage: python src/analysis/extract_faces.py <person> <session>
+# Example: python src/analysis/extract_faces.py sameer_gupta session-001
+parser = argparse.ArgumentParser(description="Extract MediaPipe facial data for one recording session.")
+parser.add_argument("person", help="Person or project folder under recordings/raw, e.g. sameer_gupta")
+parser.add_argument("session", help="Session ID, e.g. session-001")
+args = parser.parse_args()
 
-VIDEO = PROJECT_ROOT / "recordings" / "raw" / f"{VIDEO_ID}.mp4"
-MODEL = PROJECT_ROOT / "models" / "mediapipe" / "face_landmarker.task"
+if not is_valid_person(args.person):
+    parser.error(f"Invalid person/project name: {args.person}")
+if not is_valid_session(args.session):
+    parser.error(f"Invalid session ID (expected session-NNN): {args.session}")
 
-OUTPUT = PROJECT_ROOT / "datasets" / VIDEO_ID
+PERSON = args.person
+SESSION = args.session
+
+VIDEO = session_video(PERSON, SESSION)
+MODEL = MODEL_PATH
+
+OUTPUT = session_dataset_dir(PERSON, SESSION)
 FRAMES_DIR = OUTPUT / "frames"
+
+if not VIDEO.is_file():
+    raise SystemExit(f"Video not found: {VIDEO}")
 
 # Never overwrite an existing dataset
 if (OUTPUT / "facial_data.json").exists():

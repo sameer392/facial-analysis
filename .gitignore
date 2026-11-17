@@ -11,7 +11,7 @@ models/**
 !models/**/.gitkeep
 # Generated datasets (created locally by extract_faces.py)
 datasets/
-recordings/raw/*.mp4
+recordings/raw/**/*.mp4
 recordings/processed/*
 !recordings/processed/.gitkeep
 checkpoints/*
