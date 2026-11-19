@@ -185,16 +185,17 @@ Do not describe a phase as implemented when only some of its steps are.
 
 - **Step 1, V2 schema: implemented** (`src/analysis/schema_v2.py`).
 - **Step 2, V2 session writer: implemented** (`src/analysis/session_writer_v2.py`), with staging, manifest, lock, recovery and rollback (section 7).
+- **Stage 2, shared video frame reader: implemented** (`src/extraction/video_frames.py`). Strict: missing, unopenable, empty or truncated videos raise errors. Timestamps are `fps_derived`; decoded presentation times are not extracted yet.
+- **Stage 3, model registry: implemented** (`src/extraction/model_registry.py`). Verifies SHA-256 before any model is loaded. Records licence status as evidence, not clearance.
+- **Stage 4, Pose Landmarker extractor: implemented** (`src/extraction/pose_extractor.py`). Single subject only; missing detections are NaN rows. Tested with a fake detector; a one-off smoke test ran the real model on a blank synthetic video only.
+- **Stage 5, V2 session assembly: implemented** (`src/extraction/v2_session_builder.py`). Combines V1 facial data (read only) with the Pose output and writes through the V2 writer. Hands are recorded as an absent stream. Tested with synthetic data.
 - **Overall phase: incomplete.** Still pending:
-  - model licence verification and acquisition, after approval
-  - shared video decoding and timestamp extraction
-  - pose extraction
-  - hand extraction
-  - integration of facial, pose and hand extraction
-  - the V2 extraction workflow
+  - hand extraction (the hand stream is currently recorded as absent)
+  - a command-line or dashboard entry point that runs the V2 Pose workflow end to end
+  - validation on real recordings (no real session has been written through the Pose workflow yet)
   - the V1-to-V2 migration command
   - the Body and Hand Motion dashboard page
-  - real-recording validation
+  - model licence clearance for commercial use or redistribution (Pose FULL is partly verified; Face and Hand are unverified)
 
 ### Other status
 
@@ -340,7 +341,7 @@ Do not download models, add model binaries or add model dependencies without exp
 The CI workflow is `.github/workflows/tests.yml`. The documented test command is:
 
 ```powershell
-python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 tests.test_session_writer_v2 tests.test_overlay tests.test_video_frames tests.test_model_registry tests.test_pose_extractor tests.test_v2_session_builder -v
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 If test modules or the workflow change, update this command in the same change.

@@ -41,6 +41,17 @@ All notable changes to this project are recorded here. The format follows
 - Synthetic demo landmarks rotated in 2D while the matrix recorded 3D rotation. The demo now
   uses one consistent model.
 
+### Added (Phase 2 pose workflow, partially implemented)
+- Shared video frame reader (`src/extraction/video_frames.py`), strict about truncated or empty videos.
+- Model registry with SHA-256 verification before any model is loaded (`src/extraction/model_registry.py`).
+- Pose Landmarker extractor with an injected detector and NaN rows for missing detections
+  (`src/extraction/pose_extractor.py`). Single subject only.
+- Builder that combines V1 facial data with the Pose output into a V2 session
+  (`src/extraction/v2_session_builder.py`). Hands are recorded as an absent stream.
+- `docs/dataset_layout.md`: V1 and V2 layouts, arrays, metadata and licence notes.
+- CI and the documented test command now use test discovery (`tests/test_*.py`).
+- Not validated on real recordings. No command-line or dashboard entry point yet.
+
 ### Added (landmark overlay)
 - Dashboard landmark overlay modes: Hybrid (default), Wireframe, Contours, Points and Off, with
   opacity, line-thickness and point-size controls. Implemented in `src/dashboard/overlay.py`.

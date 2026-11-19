@@ -20,6 +20,8 @@ training is not implemented yet.
 | Streamlit dashboard: people and sessions, add or process recordings, delete data, six pages | Implemented |
 | Overwrite protection (`--force` for analysis, never for extraction) | Implemented |
 | Synthetic demo data generator | Implemented |
+| Pose Landmarker extraction and V2 session assembly | **Partially implemented:** tested with synthetic data and a fake detector; not validated on real recordings; no command-line or dashboard entry point yet ([docs/dataset_layout.md](docs/dataset_layout.md)) |
+| Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
 | Neural network training and inference | **Not implemented** (`src/training/`, `src/inference/` are empty) |
@@ -176,6 +178,9 @@ Each session folder `datasets/<person>/session-NNN/` contains:
 
 Each person folder also has `dataset_metadata.json`, which lists the processed sessions with
 their frame counts and frame rates.
+
+The version 2 layout (Pose and V2 metadata, manifest, licence notes) is described in
+[docs/dataset_layout.md](docs/dataset_layout.md).
 
 ### Example row (synthetic data, shortened)
 
