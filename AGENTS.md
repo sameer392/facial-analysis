@@ -1,4 +1,4 @@
-# AGENTS.md — Facial Analysis Project
+﻿# AGENTS.md â€” Facial Analysis Project
 
 This is the canonical source of shared project instructions for every coding agent working in this repository (Claude Code and OpenAI Codex). `CLAUDE.md` only adds Claude Code-specific operating notes and defers to this file.
 
@@ -45,7 +45,7 @@ Prefer incremental, modular and testable changes.
 
 The intended platform consists of four layers. Keep them separate.
 
-### Layer 1 — Acquisition and Extraction
+### Layer 1 â€” Acquisition and Extraction
 
 - Video decoding and timestamps
 - Facial landmarks, blendshapes and transformation matrices
@@ -53,7 +53,7 @@ The intended platform consists of four layers. Keep them separate.
 - Hand landmarks and handedness
 - Audio extraction and alignment
 
-### Layer 2 — Motion Analysis
+### Layer 2 â€” Motion Analysis
 
 - Facial and mouth movement
 - Eye and eyebrow movement
@@ -63,7 +63,7 @@ The intended platform consists of four layers. Keep them separate.
 - Velocity and acceleration
 - Tracking and detection quality
 
-### Layer 3 — Dataset and Training
+### Layer 3 â€” Dataset and Training
 
 - Standardized schemas
 - Session metadata
@@ -72,7 +72,7 @@ The intended platform consists of four layers. Keep them separate.
 - Dataset comparison
 - Training-ready exports
 
-### Layer 4 — Inference and Digital Human Generation
+### Layer 4 â€” Inference and Digital Human Generation
 
 - Audio-driven lip synchronization
 - Facial animation
@@ -173,7 +173,7 @@ Note that `tracking_quality.json` exists in both layouts at different paths: `<s
 
 Do not describe a phase as implemented when only some of its steps are.
 
-### Phase 1 — Facial Analysis: implemented
+### Phase 1 â€” Facial Analysis: implemented
 
 - MediaPipe Face Landmarker, 478 landmarks, 52 blendshape scores, transformation matrices
 - JSON and CSV exports
@@ -181,7 +181,7 @@ Do not describe a phase as implemented when only some of its steps are.
 - Blink detection and tracking-quality metrics
 - Streamlit dashboard
 
-### Phase 2 — Multimodal Dataset Infrastructure: partially implemented
+### Phase 2 â€” Multimodal Dataset Infrastructure: partially implemented
 
 - **Step 1, V2 schema: implemented** (`src/analysis/schema_v2.py`).
 - **Step 2, V2 session writer: implemented** (`src/analysis/session_writer_v2.py`), with staging, manifest, lock, recovery and rollback (section 7).
@@ -340,7 +340,7 @@ Do not download models, add model binaries or add model dependencies without exp
 The CI workflow is `.github/workflows/tests.yml`. The documented test command is:
 
 ```powershell
-python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 tests.test_session_writer_v2 tests.test_overlay -v
+python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 tests.test_session_writer_v2 tests.test_overlay tests.test_video_frames -v
 ```
 
 If test modules or the workflow change, update this command in the same change.
