@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { EChartsOption } from "echarts";
@@ -29,6 +29,24 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
 
   const frames = info.data?.frames ?? 0;
   const row: TimelineRow | undefined = timeline.data?.[frame];
+
+  // Playback steps through frames at the recording's frame rate, and stops at the last frame.
+  const [playing, setPlaying] = useState(false);
+  const fps = info.data?.fps ?? 0;
+  const stepMs = fps > 0 ? Math.max(1000 / fps, 100) : 200;
+  useEffect(() => {
+    if (!playing || frames === 0) return;
+    const id = window.setInterval(() => {
+      setFrame((f) => {
+        if (f >= frames - 1) {
+          setPlaying(false);
+          return f;
+        }
+        return f + 1;
+      });
+    }, stepMs);
+    return () => window.clearInterval(id);
+  }, [playing, frames, stepMs]);
 
   const timelineOption = useMemo<EChartsOption | null>(() => {
     if (!timeline.data) return null;
@@ -74,8 +92,9 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
                   <input type="range" min={0} max={frames - 1} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label="Frame" />
                 </label>
                 <div className="flex gap-2 text-sm">
-                  <button type="button" className="rounded border border-[var(--border)] px-3 py-1" disabled={frame <= 0} onClick={() => setFrame(frame - 1)}>Previous</button>
-                  <button type="button" className="rounded border border-[var(--border)] px-3 py-1" disabled={frame >= frames - 1} onClick={() => setFrame(frame + 1)}>Next</button>
+                  <button type="button" className="rounded border border-[var(--border)] px-3 py-1" disabled={frame <= 0} onClick={() => { setPlaying(false); setFrame(frame - 1); }}>Previous</button>
+                  <button type="button" className="rounded border border-[var(--border)] px-3 py-1" disabled={frame >= frames - 1} onClick={() => { setPlaying(false); setFrame(frame + 1); }}>Next</button>
+                  <button type="button" className="rounded border border-[var(--border)] px-3 py-1" onClick={() => { if (!playing && frame >= frames - 1) setFrame(0); setPlaying(!playing); }} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
                 </div>
                 {/* Served by the API from the stored recording; the image is not generated in the browser. */}
                 <img
