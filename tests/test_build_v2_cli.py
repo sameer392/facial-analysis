@@ -198,6 +198,69 @@ class FailurePathTests(CliTestCase):
         self.assertEqual(det.closed, 1)
 
 
+class RollbackOnV1ChangeTests(CliTestCase):
+    """If a version 1 file changes during the run, the V2 output of that run is rolled back."""
+
+    def _tamper_at_first_frame(self):
+        def tamper(index):
+            if index == 0:
+                (self.dataset / "calibration.json").write_bytes(b"changed during run")
+        return FakeDetector(on_detect=tamper)
+
+    def test_first_time_run_with_v1_change_leaves_no_v2(self):
+        code, _, err = self.run_cli(detector=self._tamper_at_first_frame())
+        self.assertEqual(code, 4)
+        self.assertIn("calibration.json", err)
+        self.assertIn("rolled back", err)
+        self.assertEqual(s2.session_layout(self.dataset), "v1")
+        self.assertFalse((self.dataset / "metadata.json").exists())
+        self.assertFalse((self.dataset / "manifest.json").exists())
+        self.assertFalse((self.dataset / "facial").exists())
+
+    def test_regeneration_with_v1_change_restores_the_previous_v2(self):
+        self.assertEqual(self.run_cli(detector=FakeDetector())[0], 0)
+        previous_meta = (self.dataset / "metadata.json").read_bytes()
+        previous_manifest = (self.dataset / "manifest.json").read_bytes()
+        code, _, err = self.run_cli("--regenerate-v2", detector=self._tamper_at_first_frame())
+        self.assertEqual(code, 4)
+        self.assertIn("restored", err)
+        self.assertEqual(s2.session_layout(self.dataset), "v2")
+        self.assertEqual((self.dataset / "metadata.json").read_bytes(), previous_meta)
+        self.assertEqual((self.dataset / "manifest.json").read_bytes(), previous_manifest)
+
+    def test_rollback_failure_is_reported_and_restoration_is_not_claimed(self):
+        from unittest import mock
+
+        def failing_rollback(_session):
+            raise cli.V2Error("simulated rollback failure")
+
+        with mock.patch.object(cli, "rollback_v2", side_effect=failing_rollback):
+            code, _, err = self.run_cli(detector=self._tamper_at_first_frame())
+        self.assertEqual(code, 4)
+        self.assertIn("rollback FAILED", err)
+        self.assertIn("simulated rollback failure", err)
+        self.assertNotIn("rolled back", err)
+        self.assertNotIn("restored", err)
+
+    def test_manifest_mismatch_during_rollback_preserves_the_files(self):
+        from unittest import mock
+
+        real_rollback = cli.rollback_v2
+
+        def corrupt_then_rollback(session):
+            (session / "timeline.csv").write_text("edited after publication\n", encoding="utf-8")
+            return real_rollback(session)
+
+        with mock.patch.object(cli, "rollback_v2", side_effect=corrupt_then_rollback):
+            code, _, err = self.run_cli(detector=self._tamper_at_first_frame())
+        self.assertEqual(code, 4)
+        self.assertIn("rollback FAILED", err)
+        self.assertIn("changed", err)
+        self.assertEqual((self.dataset / "timeline.csv").read_text(encoding="utf-8"),
+                         "edited after publication\n")
+        self.assertTrue((self.dataset / "manifest.json").is_file())
+
+
 class ArgumentTests(unittest.TestCase):
     def test_help_exits_cleanly(self):
         with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stdout(io.StringIO()):

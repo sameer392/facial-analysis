@@ -44,7 +44,7 @@ from project_paths import (  # noqa: E402
     session_video,
 )
 from schema_v2 import session_layout  # noqa: E402
-from session_writer_v2 import V2Error, V2ExistsError, write_v2_session  # noqa: E402
+from session_writer_v2 import V2Error, V2ExistsError, rollback_v2, write_v2_session  # noqa: E402
 
 EXIT_OK, EXIT_FAILED, EXIT_REFUSED, EXIT_MODEL, EXIT_V1_CHANGED = 0, 1, 2, 3, 4
 V1_FILES = ("facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
@@ -78,6 +78,27 @@ def version_one_fingerprint(dataset: Path) -> dict:
     if frames.is_dir():
         fingerprint["frames/"] = sorted((p.name, p.stat().st_size) for p in frames.iterdir() if p.is_file())
     return fingerprint
+
+
+def _rollback_after_v1_change(dataset: Path, had_previous: bool) -> str:
+    """Roll back the V2 output of this run. Returns an honest one-line outcome for the user.
+
+    Restoration is only claimed when the resulting layout is the expected one. A failed or
+    refused rollback leaves the files in place and says so.
+    """
+    expected = "v2" if had_previous else "v1"
+    try:
+        rollback_v2(dataset)
+    except V2Error as exc:
+        return (f"rollback FAILED: {exc}. The V2 files from this run were left in place, "
+                "so the session state is not confirmed.")
+    layout = session_layout(dataset)
+    if layout != expected:
+        return (f"rollback ran but the session is '{layout}' instead of '{expected}'. "
+                "Check the session folder by hand.")
+    if had_previous:
+        return "rolled back: the previous V2 dataset was restored; version 1 files are not changed by the rollback."
+    return "rolled back: no V2 dataset remains; version 1 files are not changed by the rollback."
 
 
 def main(argv=None, detector_factory=None) -> int:
@@ -153,6 +174,7 @@ def main(argv=None, detector_factory=None) -> int:
     if after != before:
         changed = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
         _error("version 1 files changed during processing: " + ", ".join(changed))
+        _error(_rollback_after_v1_change(dataset, had_previous=(layout == "v2")))
         return EXIT_V1_CHANGED
 
     print(f"V2 session published: {dataset}")

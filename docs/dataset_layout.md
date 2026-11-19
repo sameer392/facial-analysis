@@ -93,7 +93,7 @@ python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [
 
 It processes an existing V1 session (which must already have `facial_data.json`) into a V2 session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the V1 files. An existing V2 dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
 
-Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a V1 file changed during the run (reported, not rolled back).
+Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a V1 file changed during the run. The V2 output of that run is rolled back with `rollback_v2`, which restores the previous V2 dataset if there was one. If the rollback is refused (for example, because a V2 file was edited), the output says so and the files are left in place. Version 1 files are never changed by the rollback.
 
 This has been tested with synthetic data and a fake detector only. It has not been run on a real recording.
 
