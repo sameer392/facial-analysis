@@ -24,6 +24,9 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
           <Link href="/people" className="underline">People</Link> / {person}
         </p>
         <h1 className="text-2xl font-semibold">{person}</h1>
+        <p className="mt-2 text-sm">
+          <Link href={`/people/${encodeURIComponent(person)}/compare`} className="underline">Compare sessions</Link>
+        </p>
       </header>
       <Card title="Sessions">
         {sessions.isPending ? <Loading label="Loading sessions…" /> : null}
@@ -45,7 +48,15 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
             <tbody>
               {sessions.data.map((row) => (
                 <tr key={row.session_id} className="border-t border-[var(--border)]">
-                  <td className="py-2 font-mono">{row.session_id}</td>
+                  <td className="py-2 font-mono">
+                    {row.layout === "v1" || row.layout === "v2" ? (
+                      <span className="flex flex-wrap gap-3">
+                        {row.session_id}
+                        <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/facial`}>facial</Link>
+                        <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/diagnostics`}>diagnostics</Link>
+                      </span>
+                    ) : row.session_id}
+                  </td>
                   <td className="py-2">
                     {row.has_video ? <Badge tone="good">present</Badge> : <Badge>missing</Badge>}
                   </td>
