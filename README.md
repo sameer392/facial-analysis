@@ -31,6 +31,7 @@ training is not implemented yet.
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
 | V1-to-V2 migration command | **Not implemented** |
 | Next.js migration, phase P2: facial analysis, diagnostics and dataset comparison pages (`web/`) on read-only `/api` routes for version 1 data. Charts use ECharts 6.1.0 | **Implemented, typechecked and built. Browser check on local data pending** |
+| Next.js migration, phase P3: 3D facial page and Body Motion page (`web/`) on read-only `/api` routes for head pose and V2 Pose data. Body overlay is drawn by the API from the stored video (same code as the Streamlit page) | **Implemented, typechecked, built, tested with synthetic data and checked on a real V2 session in headless Chrome.** 3D is a projection, not a rotatable model (see below) |
 | Body Motion (V2 Pose) dashboard page | **Implemented as a read-only viewer** of existing V2 sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |

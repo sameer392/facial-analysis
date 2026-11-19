@@ -6,6 +6,7 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Next.js dashboard P3: 3D facial page (head pose, depth, landmark projection) and Body Motion page (overlay from the stored video, detection timeline, joint table, quality summary). Read-only routes in `api/v2_data.py`, tested in `tests/test_api_p3.py`.
 - Next.js dashboard (`web/`) P2 pages: facial analysis (tracking quality, motion, blendshapes,
   head rotation, blinks), diagnostics (face detection, neutral frames, landmarks for one frame)
   and dataset comparison across sessions. Charts use ECharts 6.1.0.
