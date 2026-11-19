@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- Next.js dashboard (`web/`) P2 pages: facial analysis (tracking quality, motion, blendshapes,
+  head rotation, blinks), diagnostics (face detection, neutral frames, landmarks for one frame)
+  and dataset comparison across sessions. Charts use ECharts 6.1.0.
+- Read-only API routes for version 1 data (`api/v1_data.py`): summary, series, blinks,
+  landmarks and comparison, with parity tests against `facial_analyzer` (`tests/test_api_p2.py`).
 - Apache-2.0 license, third-party notices and contributor guide.
 - Synthetic demo data generator (`src/analysis/demo_data.py`) and dashboard screenshots built from it.
 - `src/analysis/file_safety.py`: overwrite checks and atomic file writes.
