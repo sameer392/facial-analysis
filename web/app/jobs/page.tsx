@@ -2,10 +2,22 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ACTIVE_JOB_STATES, ApiFailure, api, type Job, type JobState } from "../lib/api";
+import { ACTIVE_JOB_STATES, ApiFailure, api, type Job, type JobKind, type JobState } from "../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 
 const TOKEN_KEY = "facial.apiToken";
+
+const KIND_LABEL: Record<JobKind, string> = {
+  v1_extract: "V1 face extraction",
+  v1_analyse: "V1 analysis outputs",
+  v2_build: "V2 Pose build",
+};
+
+const KIND_HELP: Record<JobKind, string> = {
+  v1_extract: "Reads the recording and writes the version 1 face data and frames. Never overwrites existing data. Progress is per frame.",
+  v1_analyse: "Writes the blendshape table and motion outputs from existing version 1 data. Replacing needs the box ticked.",
+  v2_build: "Writes the version 2 Pose data from the recording. Needs version 1 data first. Replacing needs the box ticked.",
+};
 
 const STATE_LABEL: Record<JobState, string> = {
   queued: "Queued",
@@ -54,6 +66,7 @@ function errorText(error: unknown): { message: string; code?: string } {
 export default function JobsPage() {
   const queryClient = useQueryClient();
   const [token, saveToken, tokenLoaded] = useApiToken();
+  const [kind, setKind] = useState<JobKind>("v1_extract");
   const [person, setPerson] = useState("");
   const [session, setSession] = useState("");
   const [regenerate, setRegenerate] = useState(false);
@@ -70,12 +83,17 @@ export default function JobsPage() {
     refetchInterval: (query) => (query.state.data?.some((j) => ACTIVE_JOB_STATES.includes(j.state)) ? 2000 : false),
   });
 
-  const startable = (sessions.data ?? []).filter((s) => s.has_video && (s.layout === "v1" || s.layout === "v2"));
+  // Which sessions each kind can start on, following the script rules. The server checks again.
+  const eligible = (layout: string) => {
+    if (kind === "v1_extract") return layout === "none";
+    return layout === "v1" || layout === "v2";
+  };
+  const startable = (sessions.data ?? []).filter((s) => s.has_video && eligible(s.layout));
   const selected = startable.find((s) => s.session_id === session);
-  const isRegeneration = selected?.layout === "v2";
+  const isRegeneration = (kind === "v2_build" && selected?.layout === "v2") || kind === "v1_analyse";
 
   const create = useMutation({
-    mutationFn: () => api.createJob(token, { person, session, regenerate }),
+    mutationFn: () => api.createJob(token, { kind, person, session, regenerate }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
@@ -126,7 +144,17 @@ export default function JobsPage() {
       </Card>
 
       <Card title="Start a V2 build">
-        <form onSubmit={onStart} className="grid gap-4 md:grid-cols-3">
+        <form onSubmit={onStart} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <label className="flex flex-col gap-1 text-sm">
+            Job
+            <select
+              className="rounded border border-[var(--border)] bg-transparent px-2 py-1"
+              value={kind}
+              onChange={(e) => { setKind(e.target.value as JobKind); setSession(""); setRegenerate(false); }}
+            >
+              {(Object.keys(KIND_LABEL) as JobKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+            </select>
+          </label>
           <label className="flex flex-col gap-1 text-sm">
             Person
             <select
@@ -149,7 +177,7 @@ export default function JobsPage() {
               <option value="">Choose a session</option>
               {startable.map((s) => (
                 <option key={s.session_id} value={s.session_id}>
-                  {s.session_id}{s.layout === "v2" ? " (V2 exists)" : ""}
+                  {s.session_id}{s.layout === "v2" ? " (V2 exists)" : s.layout === "v1" ? " (V1 exists)" : ""}
                 </option>
               ))}
             </select>
@@ -158,7 +186,7 @@ export default function JobsPage() {
             {isRegeneration ? (
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} />
-                Replace the existing V2 data
+                {kind === "v2_build" ? "Replace the existing V2 data" : "Replace the existing analysis outputs"}
               </label>
             ) : null}
             <button
@@ -170,16 +198,14 @@ export default function JobsPage() {
             </button>
           </div>
         </form>
-        {isRegeneration && !regenerate ? (
-          <p className="mt-3 text-xs text-[var(--muted)]">This session already has V2 data. Tick the box to replace it.</p>
-        ) : null}
+        <p className="mt-3 text-xs text-[var(--muted)]">{KIND_HELP[kind]}</p>
         {create.isError ? (
           <div className="mt-4">
             <ErrorState {...errorText(create.error)} />
           </div>
         ) : null}
         {create.isSuccess ? (
-          <p className="mt-3 text-sm">Build queued for {create.data.person} / {create.data.session}.</p>
+          <p className="mt-3 text-sm">{KIND_LABEL[create.data.kind]} queued for {create.data.person} / {create.data.session}.</p>
         ) : null}
       </Card>
 
@@ -216,7 +242,7 @@ function JobTable({ jobs, token, onCancel, cancelling }: { jobs: Job[]; token: s
             return (
               <tr key={job.id} className="border-t border-[var(--border)] align-top">
                 <td className="py-2 whitespace-nowrap">{new Date(job.created_at).toLocaleString()}</td>
-                <td className="py-2 font-mono">{job.person} / {job.session}{job.regenerate ? " (replace)" : ""}</td>
+                <td className="py-2 font-mono">{job.person} / {job.session}<br /><span className="font-sans text-xs text-[var(--muted)]">{KIND_LABEL[job.kind]}{job.regenerate ? ", replace" : ""}</span></td>
                 <td className="py-2"><Badge tone={stateTone(job.state)}>{STATE_LABEL[job.state]}</Badge></td>
                 <td className="py-2">
                   {job.stage ? `${job.stage} (${Math.round(job.progress * 100)} %)` : "n/a"}

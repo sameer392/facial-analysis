@@ -148,11 +148,13 @@ function get<T>(path: string): Promise<T> {
   return request<T>("GET", path);
 }
 
+export type JobKind = "v2_build" | "v1_extract" | "v1_analyse";
+
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
 
 export type Job = {
   id: string;
-  kind: string;
+  kind: JobKind;
   person: string;
   session: string;
   regenerate: boolean;
@@ -199,8 +201,8 @@ export const api = {
     ),
   jobs: () => get<Job[]>("/jobs"),
   job: (id: string) => get<Job>(`/jobs/${enc(id)}`),
-  createJob: (token: string, body: { person: string; session: string; regenerate: boolean }) =>
-    request<Job>("POST", "/jobs", { body: { kind: "v2_build", ...body }, token }),
+  createJob: (token: string, body: { kind: JobKind; person: string; session: string; regenerate: boolean }) =>
+    request<Job>("POST", "/jobs", { body, token }),
   cancelJob: (token: string, id: string) => request<Job>("POST", `/jobs/${enc(id)}/cancel`, { token }),
   v2OverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
