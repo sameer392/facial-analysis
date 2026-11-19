@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Clapperboard, Home, Users } from "lucide-react";
+import { Activity, Clapperboard, Home, ListChecks, Users } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Home },
   { href: "/people", label: "People", icon: Users },
   { href: "/recordings", label: "Recordings", icon: Clapperboard },
+  { href: "/jobs", label: "Jobs", icon: ListChecks },
 ];
 
 export function Sidebar() {
@@ -34,7 +35,7 @@ export function Sidebar() {
           </Link>
         );
       })}
-      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Read-only. Phase P3.</p>
+      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Phase P4: jobs for V2 builds; the rest is read-only.</p>
     </nav>
   );
 }

@@ -120,8 +120,15 @@ export class ApiFailure extends Error {
   }
 }
 
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(`/api${path}`, { headers: { Accept: "application/json" } });
+async function request<T>(method: "GET" | "POST", path: string, options: { body?: unknown; token?: string } = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  if (options.token) headers["X-Facial-Token"] = options.token;
+  const response = await fetch(`/api${path}`, {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
   if (!response.ok) {
     let code = "http_error";
     let message = `Request failed (${response.status})`;
@@ -136,6 +143,31 @@ async function get<T>(path: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+function get<T>(path: string): Promise<T> {
+  return request<T>("GET", path);
+}
+
+export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
+
+export type Job = {
+  id: string;
+  kind: string;
+  person: string;
+  session: string;
+  regenerate: boolean;
+  state: JobState;
+  stage: string | null;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+  exit_code: number | null;
+  message: string | null;
+  pid: number | null;
+  cancel_requested: boolean;
+};
+
+export const ACTIVE_JOB_STATES: JobState[] = ["queued", "running"];
 
 const enc = encodeURIComponent;
 
@@ -165,6 +197,11 @@ export const api = {
     get<{ frame: number; quality: PoseQuality; joints: JointRow[] }>(
       `/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/quality?threshold=${threshold}`,
     ),
+  jobs: () => get<Job[]>("/jobs"),
+  job: (id: string) => get<Job>(`/jobs/${enc(id)}`),
+  createJob: (token: string, body: { person: string; session: string; regenerate: boolean }) =>
+    request<Job>("POST", "/jobs", { body: { kind: "v2_build", ...body }, token }),
+  cancelJob: (token: string, id: string) => request<Job>("POST", `/jobs/${enc(id)}/cancel`, { token }),
   v2OverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
 };
