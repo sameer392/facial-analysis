@@ -340,7 +340,7 @@ Do not download models, add model binaries or add model dependencies without exp
 The CI workflow is `.github/workflows/tests.yml`. The documented test command is:
 
 ```powershell
-python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 tests.test_session_writer_v2 tests.test_overlay tests.test_video_frames -v
+python -m unittest tests.test_fixtures tests.test_regression tests.test_scientific tests.test_schema_v2 tests.test_session_writer_v2 tests.test_overlay tests.test_video_frames tests.test_model_registry -v
 ```
 
 If test modules or the workflow change, update this command in the same change.
