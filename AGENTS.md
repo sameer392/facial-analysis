@@ -196,14 +196,14 @@ Do not describe a phase as implemented when only some of its steps are.
   - hand extraction (the hand stream is currently recorded as absent)
   - validation on real recordings (no real session has been written through the Pose workflow yet; no recording has been approved for this)
   - the V1-to-V2 migration command
-  - the Body and Hand Motion dashboard page
+  - the Hand part of the Body and Hand Motion dashboard page, and a dashboard button that generates pose data (the Body Motion page is a read-only viewer of existing V2 sessions)
   - PTS timestamp extraction (timestamps are currently FPS-derived)
   - model licence clearance for commercial use or redistribution (Pose FULL is partly verified; Face and Hand are unverified)
 
 ### Other status
 
 - Audio Analysis dashboard page: placeholder.
-- Body Motion dashboard page: placeholder.
+- Body Motion dashboard page: read-only viewer of existing V2 Pose sessions (`src/dashboard/pages/04_Body_Motion.py`, support code `src/dashboard/v2_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.

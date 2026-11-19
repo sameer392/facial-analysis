@@ -28,7 +28,7 @@ training is not implemented yet.
 | Rollback of a run's V2 output when a V1 file changes during processing | Implemented (CLI, exit code 4) |
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
 | V1-to-V2 migration command | **Not implemented** |
-| Body and Hand Motion dashboard page | **Not implemented** (placeholder page) |
+| Body Motion (V2 Pose) dashboard page | **Implemented as a read-only viewer** of existing V2 sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
@@ -178,7 +178,7 @@ Automated tests use synthetic data and a fake detector. Real-recording validatio
 | 01 Facial Analysis | Tracking quality, displacement, velocity, acceleration, neutral-face offset, blinks, head pose, jaw and mouth |
 | 02 3D Facial Analysis | 3D landmark view (raw or head-pose compensated), head pose angles, depth span |
 | 03 Audio Analysis | Placeholder. Not implemented |
-| 04 Body Motion | Placeholder. Not implemented |
+| 04 Body Motion | Read-only viewer of existing V2 Pose sessions (pose overlay, visibility threshold, detection timeline, joint table, tracking quality). Shows only sessions that pass the V2 metadata and manifest checks. Does not generate pose data. |
 | 05 Dataset Comparison | Compares the processed sessions of one person: summary, blendshape means, distributions, landmark stability |
 | 06 Diagnostics | Tracking checks, interruptions, neutral-frame selection, raw versus compensated landmarks, head rotation, displacement, velocity, acceleration |
 

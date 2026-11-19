@@ -85,5 +85,10 @@ The project was developed locally before publication: MediaPipe face landmark ex
 blendshape and transformation-matrix export to JSON and CSV, motion analysis, and a Streamlit
 dashboard for a single presenter. No tagged release exists yet.
 
+- Body Motion dashboard page: read-only viewer for existing V2 Pose sessions, with the pose
+  overlay on the video frame, a visibility threshold that does not change stored values, a
+  detection timeline from timeline.csv, a joint table, and tracking-quality figures. Discovery lists
+  only V2 sessions that pass the metadata and manifest checks (`src/dashboard/v2_viewer.py`).
+  Tested with synthetic data (22 tests). Playback is not implemented.
 - Pose visibility gate: joints outside the frame with visibility below 0.5 are treated as not visible for analysis (see docs/validation.md section 9). The stored arrays are unchanged.
 
