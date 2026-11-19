@@ -118,3 +118,39 @@ def settings() -> dict:
         "writes": "only through job routes; each job runs an existing script",
         "bind_address": "127.0.0.1",
     }
+
+
+# ---- phase P6: layers that are not built yet ------------------------------------------------
+
+LAYERS = {
+    "audio": {
+        "title": "Audio analysis",
+        "extractor": "src/extraction/audio_extractor.py",
+        "will_show": "Speech features (energy, pitch, speech and silence timing) aligned to each session's frames.",
+        "needed": "An audio extractor that reads each recording's audio, writes features keyed by session into "
+                  "datasets/<person>/<session>/, and aligns them to the video frame timestamps.",
+    },
+    "hand": {
+        "title": "Hand tracking",
+        "extractor": "src/extraction/hand_extractor.py",
+        "will_show": "Hand landmarks (21 per hand) aligned to each session's frames, from the Hand Landmarker model.",
+        "needed": "A hand extractor that writes hand landmarks and visibility into the V2 hands/ folder, plus the "
+                  "validation and viewer code that reads them. The Hand Landmarker model is registered and checked on the Models page.",
+    },
+}
+
+
+def layers(root: Path | None = None) -> list[dict]:
+    base = Path(root) if root is not None else _ROOT
+    rows = []
+    for key, info in LAYERS.items():
+        present = (base / info["extractor"]).is_file()
+        rows.append({
+            "key": key,
+            "title": info["title"],
+            "implemented": present,
+            "extractor": info["extractor"],
+            "will_show": info["will_show"],
+            "needed": info["needed"],
+        })
+    return rows

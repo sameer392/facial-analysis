@@ -179,3 +179,10 @@ def job_log(job_id: str, lines: int = 200):
 @app.get("/api/settings")
 def settings():
     return system.settings()
+
+
+# ---- phase P6: layers not built yet (read-only) ---------------------------------------------
+
+@app.get("/api/layers")
+def layers():
+    return system.layers()

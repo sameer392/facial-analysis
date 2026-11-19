@@ -141,5 +141,30 @@ class RouteTests(P5TestCase):
                 self.assertEqual(set(route.methods) - {"GET", "HEAD"}, set(), route.path)
 
 
+class LayerTests(P5TestCase):
+    def test_missing_extractors_are_reported_as_not_implemented(self):
+        empty = self.tmp / "project"
+        rows = {r["key"]: r for r in system.layers(root=empty)}
+        self.assertEqual(set(rows), {"audio", "hand"})
+        self.assertFalse(rows["audio"]["implemented"])
+        self.assertFalse(rows["hand"]["implemented"])
+        self.assertIn("needed", rows["hand"])
+
+    def test_present_extractor_is_reported_as_implemented(self):
+        root = self.tmp / "project"
+        (root / "src" / "extraction").mkdir(parents=True)
+        (root / "src" / "extraction" / "audio_extractor.py").write_text("", encoding="utf-8")
+        rows = {r["key"]: r for r in system.layers(root=root)}
+        self.assertTrue(rows["audio"]["implemented"])
+        self.assertFalse(rows["hand"]["implemented"])
+
+    def test_layers_route_is_read_only_and_answers(self):
+        from api.main import app
+
+        status, body = call(app, "GET", "/api/layers")
+        self.assertEqual(status, 200)
+        self.assertEqual({r["key"] for r in body}, {"audio", "hand"})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
