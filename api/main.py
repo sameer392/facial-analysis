@@ -9,7 +9,7 @@ Only GET routes exist in P0. The server binds to 127.0.0.1 by design. Nothing is
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from api import catalog
+from api import catalog, v1_data
 from api.catalog import ApiError
 
 app = FastAPI(
@@ -39,3 +39,34 @@ def persons():
 @app.get("/api/persons/{person}/sessions")
 def sessions(person: str):
     return catalog.list_sessions(person)
+
+
+# ---- phase P2: V1 data for the analysis pages (read-only) ----------------------------------
+
+@app.get("/api/persons/{person}/sessions/{session}/v1/summary")
+def v1_summary(person: str, session: str):
+    return v1_data.summary(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v1/series")
+def v1_series(person: str, session: str, fields: str = ""):
+    names = [f for f in fields.split(",") if f]
+    if not names:
+        raise ApiError("invalid_request", "name at least one field, for example fields=velocity,jaw_open", 400)
+    return v1_data.series(person, session, names)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v1/blinks")
+def v1_blinks(person: str, session: str):
+    return v1_data.blinks(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v1/landmarks/{index}")
+def v1_landmarks(person: str, session: str, index: int, compensated: bool = False):
+    return v1_data.landmarks(person, session, index, compensated)
+
+
+@app.get("/api/persons/{person}/comparison")
+def comparison(person: str, sessions: str = ""):
+    names = [s for s in sessions.split(",") if s]
+    return v1_data.comparison(person, names)
