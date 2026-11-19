@@ -2,13 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Clapperboard, Home, ListChecks, Users } from "lucide-react";
+import { Activity, Clapperboard, Home, ListChecks, ScrollText, Settings, ShieldCheck, Users } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Home },
   { href: "/people", label: "People", icon: Users },
   { href: "/recordings", label: "Recordings", icon: Clapperboard },
   { href: "/jobs", label: "Jobs", icon: ListChecks },
+  { href: "/models", label: "Models", icon: ShieldCheck },
+  { href: "/logs", label: "Logs", icon: ScrollText },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
@@ -35,7 +38,7 @@ export function Sidebar() {
           </Link>
         );
       })}
-      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Phase P4: jobs for V2 builds; the rest is read-only.</p>
+      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Phase P5: models, logs and settings are read-only.</p>
     </nav>
   );
 }

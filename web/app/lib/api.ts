@@ -171,6 +171,45 @@ export type Job = {
 
 export const ACTIVE_JOB_STATES: JobState[] = ["queued", "running"];
 
+export type ModelStatus = {
+  key: string;
+  filename: string;
+  location: string;
+  expected_sha256: string;
+  version: string;
+  source_url: string;
+  licence_status: string;
+  present: boolean;
+  size_bytes: number | null;
+  sha256_status: "match" | "mismatch" | "missing";
+  actual_sha256: string | null;
+};
+
+export type JobLogRow = {
+  job_id: string;
+  kind: JobKind;
+  person: string;
+  session: string;
+  state: JobState;
+  created_at: string;
+  log_bytes: number | null;
+};
+
+export type JobLogTail = { job_id: string; total_lines: number; lines: string[] };
+
+export type Settings = {
+  api_version: string;
+  schema_version: string;
+  data_root_name: string;
+  model_folder: string;
+  python_version: string;
+  platform: string;
+  api_token_configured: boolean;
+  token_header: string;
+  writes: string;
+  bind_address: string;
+};
+
 const enc = encodeURIComponent;
 
 export const api = {
@@ -199,6 +238,10 @@ export const api = {
     get<{ frame: number; quality: PoseQuality; joints: JointRow[] }>(
       `/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/quality?threshold=${threshold}`,
     ),
+  models: () => get<ModelStatus[]>("/models"),
+  jobLogs: (limit = 50) => get<JobLogRow[]>(`/logs/jobs?limit=${limit}`),
+  jobLogTail: (id: string, lines = 200) => get<JobLogTail>(`/logs/jobs/${enc(id)}?lines=${lines}`),
+  settings: () => get<Settings>("/settings"),
   jobs: () => get<Job[]>("/jobs"),
   job: (id: string) => get<Job>(`/jobs/${enc(id)}`),
   createJob: (token: string, body: { kind: JobKind; person: string; session: string; regenerate: boolean }) =>
