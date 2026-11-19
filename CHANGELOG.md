@@ -51,6 +51,10 @@ All notable changes to this project are recorded here. The format follows
 - `docs/dataset_layout.md`: V1 and V2 layouts, arrays, metadata and licence notes.
 - CI and the documented test command now use test discovery (`tests/test_*.py`).
 - Not validated on real recordings. No command-line or dashboard entry point yet.
+- Command-line entry point `src/extraction/build_v2_session.py <person> <session>`: refuses bad
+  input before touching the model, verifies the Pose model's SHA-256, refuses an existing V2
+  dataset unless `--regenerate-v2` is given, always closes the detector, and checks that V1 files
+  are unchanged. Tested with synthetic data and a fake detector (16 tests).
 
 ### Added (landmark overlay)
 - Dashboard landmark overlay modes: Hybrid (default), Wireframe, Contours, Points and Off, with

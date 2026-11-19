@@ -1,0 +1,164 @@
+"""Command-line entry point: process an existing V1 session into a V2 session with Pose output.
+
+Usage:
+    python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+
+Example:
+    python src/extraction/build_v2_session.py sameer_gupta session-001
+
+Requires: the raw video recordings/raw/<person>/<session>.mp4, the V1 facial data
+datasets/<person>/<session>/facial_data.json (from extract_faces.py), and the Pose FULL model in
+models/mediapipe/ (its SHA-256 is verified before it is loaded).
+
+Exit codes:
+    0  V2 session published
+    1  processing failed (video, extraction, build or write error); nothing published
+    2  refused before processing (bad names, missing inputs, existing V2 without --regenerate-v2)
+    3  model missing or SHA-256 mismatch; the model was not loaded
+    4  a version 1 file changed during the run (reported; the V2 output is not rolled back)
+
+Version 1 files and the raw video are never written. The MediaPipe detector is closed on every path.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import sys
+from pathlib import Path
+
+_SRC = Path(__file__).resolve().parents[1]
+_ANALYSIS = _SRC / "analysis"
+for _p in (_SRC, _ANALYSIS):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+from extraction.model_registry import MODELS_DIR, ModelIntegrityError  # noqa: E402
+from extraction.pose_extractor import ExtractionError, extract_pose_video, load_pose_detector  # noqa: E402
+from extraction.v2_session_builder import BuildError, build_payload  # noqa: E402
+from extraction.video_frames import VideoError, open_video_info  # noqa: E402
+from project_paths import (  # noqa: E402
+    is_valid_person,
+    is_valid_session,
+    session_dataset_dir,
+    session_video,
+)
+from schema_v2 import session_layout  # noqa: E402
+from session_writer_v2 import V2Error, V2ExistsError, write_v2_session  # noqa: E402
+
+EXIT_OK, EXIT_FAILED, EXIT_REFUSED, EXIT_MODEL, EXIT_V1_CHANGED = 0, 1, 2, 3, 4
+V1_FILES = ("facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
+            "blink_events.csv", "tracking_quality.json", "calibration.json")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Process an existing V1 session into a V2 session with Pose Landmarker output.")
+    parser.add_argument("person", help="person or project folder, e.g. sameer_gupta")
+    parser.add_argument("session", help="session ID, e.g. session-001")
+    parser.add_argument("--regenerate-v2", action="store_true",
+                        help="replace an existing V2 dataset (the previous one is kept for rollback)")
+    parser.add_argument("--models-dir", type=Path, default=MODELS_DIR,
+                        help="folder holding pose_landmarker_full.task (default: models/mediapipe)")
+    return parser
+
+
+def _error(message: str) -> None:
+    print(f"error: {message}", file=sys.stderr)
+
+
+def version_one_fingerprint(dataset: Path) -> dict:
+    """SHA-256 of each version 1 file, and the names and sizes of the frames folder."""
+    fingerprint = {}
+    for name in V1_FILES:
+        path = dataset / name
+        if path.is_file():
+            fingerprint[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    frames = dataset / "frames"
+    if frames.is_dir():
+        fingerprint["frames/"] = sorted((p.name, p.stat().st_size) for p in frames.iterdir() if p.is_file())
+    return fingerprint
+
+
+def main(argv=None, detector_factory=None) -> int:
+    """Run the CLI. detector_factory is for tests; by default the verified Pose FULL model is loaded."""
+    args = build_parser().parse_args(argv)
+
+    if not is_valid_person(args.person):
+        _error(f"invalid person or project name: {args.person!r}")
+        return EXIT_REFUSED
+    if not is_valid_session(args.session):
+        _error(f"invalid session name (expected session-NNN): {args.session!r}")
+        return EXIT_REFUSED
+
+    video = session_video(args.person, args.session)
+    dataset = session_dataset_dir(args.person, args.session)
+    if not video.is_file():
+        _error(f"raw video not found: {video}")
+        return EXIT_REFUSED
+    if not (dataset / "facial_data.json").is_file():
+        _error(f"version 1 facial data not found: {dataset / 'facial_data.json'}. "
+               "Run extract_faces.py for this session first.")
+        return EXIT_REFUSED
+
+    layout = session_layout(dataset)
+    if layout == "v2" and not args.regenerate_v2:
+        _error("a complete version 2 dataset already exists. Rerun with --regenerate-v2 to replace it.")
+        return EXIT_REFUSED
+
+    try:
+        info = open_video_info(video)
+    except VideoError as exc:
+        _error(str(exc))
+        return EXIT_FAILED
+
+    before = version_one_fingerprint(dataset)
+    print(f"Video: {video.name} ({info.width}x{info.height}, {info.fps:.3f} fps)")
+
+    factory = detector_factory or (lambda: load_pose_detector(models_dir=args.models_dir))
+    try:
+        detector = factory()
+    except ModelIntegrityError as exc:
+        _error(str(exc))
+        return EXIT_MODEL
+    print("Pose Landmarker FULL loaded (SHA-256 verified).")
+
+    try:
+        print("Extracting pose landmarks...")
+        pose = extract_pose_video(video, detector=detector)
+        print(f"  frames: {pose.image.shape[0]}, pose detected on {int(pose.detected.sum())} "
+              f"({pose.detection_rate:.1%})")
+        print("Building the V2 session payload...")
+        payload = build_payload(dataset_dir=dataset, pose=pose, fps=info.fps,
+                                person=args.person, session_id=args.session,
+                                video_filename=video.name, video_size=(info.width, info.height))
+        print("Publishing the V2 session...")
+        write_v2_session(dataset, payload, regenerate=args.regenerate_v2)
+    except V2ExistsError as exc:
+        _error(str(exc))
+        return EXIT_REFUSED
+    except (VideoError, ExtractionError, BuildError) as exc:
+        _error(str(exc))
+        return EXIT_FAILED
+    except V2Error as exc:
+        _error(f"{exc}. If no other run is active, run recover_incomplete_v2 for this session.")
+        return EXIT_FAILED
+    except Exception as exc:  # report anything unexpected; the detector is still closed below
+        _error(f"unexpected error: {type(exc).__name__}: {exc}")
+        return EXIT_FAILED
+    finally:
+        detector.close()
+
+    after = version_one_fingerprint(dataset)
+    if after != before:
+        changed = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
+        _error("version 1 files changed during processing: " + ", ".join(changed))
+        return EXIT_V1_CHANGED
+
+    print(f"V2 session published: {dataset}")
+    print("Version 1 files: unchanged.")
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())

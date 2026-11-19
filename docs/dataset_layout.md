@@ -85,6 +85,18 @@ Copied from `THIRD_PARTY_NOTICES.md`, which is the authoritative record:
 
 Model files are kept in `models/mediapipe/`, which git ignores. They are never committed.
 
+## Command-line entry point
+
+```powershell
+python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+```
+
+It processes an existing V1 session (which must already have `facial_data.json`) into a V2 session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the V1 files. An existing V2 dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
+
+Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a V1 file changed during the run (reported, not rolled back).
+
+This has been tested with synthetic data and a fake detector only. It has not been run on a real recording.
+
 ## Using the Pose workflow from code
 
 The pieces are separate, and nothing runs them automatically yet. Example, using a session folder that already has V1 facial data:
