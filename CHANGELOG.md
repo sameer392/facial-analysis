@@ -41,6 +41,13 @@ All notable changes to this project are recorded here. The format follows
 - Synthetic demo landmarks rotated in 2D while the matrix recorded 3D rotation. The demo now
   uses one consistent model.
 
+### Added (Next.js migration, phase P1: read-only web shell)
+- `web/`: Next.js 16 (App Router) with TypeScript and Tailwind CSS 4. Pages: Overview (API status), People, a person's sessions, and Recordings across people. Each page handles loading, empty and error states.
+- The browser calls `/api/...` on the Next.js server, which proxies only `/api` to the local P0 API (127.0.0.1). The API itself is not opened to browsers, so no CORS is enabled.
+- Components are hand-written in Tailwind for now (the shadcn/ui CLI is not used yet).
+- CI: a Ubuntu job runs `npm ci`, `npm run typecheck` and `npm run build` for `web/`.
+- Read-only: no uploads, jobs or deletes yet.
+
 ### Added (Next.js migration, phase P0: read-only API)
 - `api/main.py` and `api/catalog.py`: `GET /api/health`, `GET /api/persons`, and `GET /api/persons/{person}/sessions`. Read-only; names are validated; errors have a code and status; no absolute paths are returned.
 - `fastapi`, `uvicorn` and `pydantic` pinned in `requirements.txt`.

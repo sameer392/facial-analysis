@@ -206,7 +206,8 @@ Do not describe a phase as implemented when only some of its steps are.
 ### Next.js migration status
 
 - **Phase P0, read-only Python API: implemented** (`api/main.py`, `api/catalog.py`). Routes: `GET /api/health`, `GET /api/persons`, `GET /api/persons/{person}/sessions`. Names are validated, errors carry a code and status, and no request writes to disk. Run with `uvicorn api.main:app --host 127.0.0.1 --port 8000`. Tested with synthetic data (11 tests).
-- **Not yet started:** the Next.js web app, write endpoints (uploads, jobs, deletes), the job system, and parity pages (phases P1 to P7 in the proposal).
+- **Phase P1, read-only web shell: implemented** (`web/`). Next.js 16, React 19, TypeScript 5.9, Tailwind CSS 4, TanStack Query and Lucide, all pinned exactly in `web/package.json`. Pages: Overview, People, a person's sessions, Recordings. The browser calls `/api`, which Next.js proxies to the local API only. Checked by `npm run typecheck`, `npm run build` (CI, Ubuntu) and a headless browser screenshot on local data. Components are hand-written; shadcn/ui is not yet used.
+- **Not yet started:** write endpoints (uploads, jobs, deletes), the job system, and parity pages for the analysis views (phases P2 to P7 in the proposal).
 - Streamlit stays in the project until phase P7. The decided end state is Next.js only, with Streamlit removed.
 
 ### Other status

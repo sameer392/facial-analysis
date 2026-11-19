@@ -27,6 +27,7 @@ training is not implemented yet.
 | Pose-to-V2 command-line entry point (`src/extraction/build_v2_session.py`) | **Implemented, tested with synthetic data; not run on a real recording** |
 | Rollback of a run's V2 output when a V1 file changes during processing | Implemented (CLI, exit code 4) |
 | Next.js migration, phase P0: read-only Python API (`api/`) for health, persons and sessions | **Implemented, tested with synthetic data.** Read-only; binds to 127.0.0.1 when run. The web app and later phases are planned ([docs/proposals/nextjs_migration.md](docs/proposals/nextjs_migration.md)) |
+| Next.js migration, phase P1: read-only web shell (`web/`) with Overview, People, sessions and Recordings | **Implemented, built and checked in a browser on local data.** Read-only. Run it with `npm ci` then `npm run dev` in `web/`, with the API on 127.0.0.1:8000 |
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
 | V1-to-V2 migration command | **Not implemented** |
 | Body Motion (V2 Pose) dashboard page | **Implemented as a read-only viewer** of existing V2 sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
