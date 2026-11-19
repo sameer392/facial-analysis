@@ -13,6 +13,7 @@ Requires src/analysis on sys.path (for schema_v2), as the other modules do.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -20,7 +21,11 @@ from typing import Iterator
 import cv2
 import numpy as np
 
-from schema_v2 import frame_timestamps_ms
+_ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "analysis"
+if str(_ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(_ANALYSIS_DIR))
+
+from schema_v2 import frame_timestamps_ms  # noqa: E402
 
 
 class VideoError(Exception):
