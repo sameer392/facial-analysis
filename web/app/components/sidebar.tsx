@@ -34,7 +34,7 @@ export function Sidebar() {
           </Link>
         );
       })}
-      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Read-only. Phase P1.</p>
+      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Read-only. Phase P3.</p>
     </nav>
   );
 }

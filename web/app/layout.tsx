@@ -5,7 +5,7 @@ import { Sidebar } from "./components/sidebar";
 
 export const metadata: Metadata = {
   title: "Facial Analysis",
-  description: "Read-only view of facial and body motion datasets (phase P1).",
+  description: "Read-only view of facial and body motion datasets (phases P0 to P3).",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

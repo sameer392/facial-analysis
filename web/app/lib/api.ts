@@ -63,6 +63,53 @@ export type Comparison = {
   distributions: Record<string, { edges: (number | null)[]; shares: Record<string, (number | null)[]> }>;
 };
 
+export type HeadPose = {
+  time_s: (number | null)[];
+  yaw_deg: (number | null)[];
+  pitch_deg: (number | null)[];
+  roll_deg: (number | null)[];
+  depth_range: (number | null)[];
+};
+
+export type V2Info = {
+  session_id: string;
+  valid: boolean;
+  frames: number;
+  width: number;
+  height: number;
+  fps: number | null;
+  joint_names: string[];
+  scope: string;
+};
+
+export type TimelineRow = Record<string, number | string | boolean | null>;
+
+export type JointState = "shown" | "low_visibility" | "off_frame" | "missing";
+
+export type JointRow = {
+  index: number;
+  joint: string;
+  x: number | null;
+  y: number | null;
+  z: number | null;
+  visibility: number | null;
+  presence: number | null;
+  state: JointState;
+};
+
+export type PoseQuality = {
+  frames: number;
+  pose_detected_frames: number;
+  pose_detection_rate: number;
+  missing_pose_frames: number[];
+  median_visibility: number | null;
+  mean_visibility: number | null;
+  valid_joints_selected_frame: number;
+  valid_joint_share_detected_frames: number;
+  threshold: number;
+  scope: string;
+};
+
 export class ApiFailure extends Error {
   constructor(
     public status: number,
@@ -108,4 +155,16 @@ export const api = {
     ),
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
+  headPose: (person: string, session: string) =>
+    get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/v1/head-pose`),
+  v2Info: (person: string, session: string) =>
+    get<V2Info>(`/persons/${enc(person)}/sessions/${enc(session)}/v2`),
+  v2Timeline: (person: string, session: string) =>
+    get<TimelineRow[]>(`/persons/${enc(person)}/sessions/${enc(session)}/v2/timeline`),
+  v2Quality: (person: string, session: string, index: number, threshold: number) =>
+    get<{ frame: number; quality: PoseQuality; joints: JointRow[] }>(
+      `/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/quality?threshold=${threshold}`,
+    ),
+  v2OverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
 };

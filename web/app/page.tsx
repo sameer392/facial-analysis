@@ -34,7 +34,7 @@ export default function OverviewPage() {
           {persons.data ? <p className="text-3xl font-semibold">{persons.data.length}</p> : null}
         </Card>
         <Card title="Phase">
-          <p className="text-sm">P1: web shell and read-only pages.</p>
+          <p className="text-sm">P3: read-only analysis pages (facial, diagnostics, comparison, 3D, body motion).</p>
           <p className="mt-2 text-sm text-[var(--muted)]">Upload, jobs and deletes are not yet implemented.</p>
         </Card>
       </div>
