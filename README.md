@@ -30,6 +30,7 @@ training is not implemented yet.
 | Next.js migration, phase P1: read-only web shell (`web/`) with Overview, People, sessions and Recordings | **Implemented, built and checked in a browser on local data.** Read-only. Run it with `npm ci` then `npm run dev` in `web/`, with the API on 127.0.0.1:8000 |
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
 | V1-to-V2 migration command | **Not implemented** |
+| Next.js migration, phase P2: facial analysis, diagnostics and dataset comparison pages (`web/`) on read-only `/api` routes for version 1 data. Charts use ECharts 6.1.0 | **Implemented, typechecked and built. Browser check on local data pending** |
 | Body Motion (V2 Pose) dashboard page | **Implemented as a read-only viewer** of existing V2 sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
