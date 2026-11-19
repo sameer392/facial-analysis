@@ -197,6 +197,15 @@ export type JobLogRow = {
 
 export type JobLogTail = { job_id: string; total_lines: number; lines: string[] };
 
+export type LayerStatus = {
+  key: "audio" | "hand";
+  title: string;
+  implemented: boolean;
+  extractor: string;
+  will_show: string;
+  needed: string;
+};
+
 export type Settings = {
   api_version: string;
   schema_version: string;
@@ -242,6 +251,7 @@ export const api = {
   jobLogs: (limit = 50) => get<JobLogRow[]>(`/logs/jobs?limit=${limit}`),
   jobLogTail: (id: string, lines = 200) => get<JobLogTail>(`/logs/jobs/${enc(id)}?lines=${lines}`),
   settings: () => get<Settings>("/settings"),
+  layers: () => get<LayerStatus[]>("/layers"),
   jobs: () => get<Job[]>("/jobs"),
   job: (id: string) => get<Job>(`/jobs/${enc(id)}`),
   createJob: (token: string, body: { kind: JobKind; person: string; session: string; regenerate: boolean }) =>
