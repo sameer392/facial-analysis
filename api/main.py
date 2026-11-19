@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, Header
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from api import catalog, jobs, v1_data, v2_data
+from api import catalog, jobs, system, v1_data, v2_data
 from api.catalog import ApiError
 
 
@@ -157,3 +157,25 @@ def get_job(job_id: str):
 @app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(require_token)])
 def cancel_job(job_id: str):
     return jobs.cancel_job(job_id)
+
+
+# ---- phase P5: models, logs and settings (read-only) ----------------------------------------
+
+@app.get("/api/models")
+def models_status():
+    return system.models()
+
+
+@app.get("/api/logs/jobs")
+def job_logs(limit: int = 50):
+    return system.job_logs(limit)
+
+
+@app.get("/api/logs/jobs/{job_id}")
+def job_log(job_id: str, lines: int = 200):
+    return system.job_log_tail(job_id, lines)
+
+
+@app.get("/api/settings")
+def settings():
+    return system.settings()
