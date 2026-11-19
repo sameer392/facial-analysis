@@ -13,6 +13,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -82,6 +83,10 @@ class P4TestCase(unittest.TestCase):
         (pp.DATASETS_ROOT / "demo_person" / "session-004" / jobs.LOCK_FILE).write_text("", encoding="utf-8")
         jobs.configure(self.tmp / "logs" / "jobs.sqlite3", self.tmp / "logs" / "jobs", token=TOKEN,
                        command_for=lambda job: [sys.executable, str(self.worker), job["session"]])
+        # the real face model is not in CI; the model check is tested by patching it
+        patcher = mock.patch.object(jobs, "verify_model", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         # stop any worker left running by a test, so no process outlives the test
@@ -103,11 +108,11 @@ class P4TestCase(unittest.TestCase):
             time.sleep(0.1)
         self.fail(f"job {job_id} did not reach {states}; last state {job['state']}")
 
-    def post_job(self, session, regenerate=False):
+    def post_job(self, session, regenerate=False, kind="v2_build"):
         from api.main import app
 
         return call(app, "POST", "/api/jobs",
-                    {"person": "demo_person", "session": session, "kind": "v2_build", "regenerate": regenerate},
+                    {"person": "demo_person", "session": session, "kind": kind, "regenerate": regenerate},
                     token=TOKEN)
 
 
@@ -175,7 +180,7 @@ class LifecycleTests(P4TestCase):
         status, job = self.post_job("session-002")
         done = self.wait_for(job["id"], ("succeeded", "failed"))
         self.assertEqual((done["state"], done["exit_code"]), ("failed", 1))
-        self.assertIn("the build failed", done["message"])
+        self.assertIn("failed; see the job log", done["message"])
 
     def test_cancel_stops_the_worker_and_marks_cancelled(self):
         from api.main import app
@@ -249,6 +254,76 @@ class RestartTests(P4TestCase):
         store.insert("demo_person", "session-001", "v2_build", False)
         with self.assertRaises(sqlite3.IntegrityError):
             store.insert("demo_person", "session-001", "v2_build", False)
+
+
+class V1KindTests(P4TestCase):
+    def test_extraction_refuses_existing_version_one_data(self):
+        status, body = self.post_job("session-001", kind="v1_extract")
+        self.assertEqual((status, body["code"]), (409, "v1_exists"))
+
+    def test_extraction_refuses_when_the_face_model_fails_its_check(self):
+        (pp.DATASETS_ROOT / "demo_person" / "session-003" / "facial_data.json").unlink()
+        with mock.patch.object(jobs, "verify_model", side_effect=jobs.ModelIntegrityError("hash mismatch")):
+            status, body = self.post_job("session-003", kind="v1_extract")
+        self.assertEqual((status, body["code"]), (503, "model_integrity"))
+        self.assertEqual(jobs.service().store.list(), [])
+
+    def test_analysis_runs_and_succeeds(self):
+        status, job = self.post_job("session-001", kind="v1_analyse")
+        self.assertEqual(status, 202)
+        done = self.wait_for(job["id"], ("succeeded", "failed"))
+        self.assertEqual(done["kind"], "v1_analyse")
+        self.assertEqual(done["state"], "succeeded")
+
+    def test_analysis_refuses_existing_outputs_unless_regenerate(self):
+        (pp.DATASETS_ROOT / "demo_person" / "session-002" / "facial_blendshapes.csv").write_text("x", encoding="utf-8")
+        status, body = self.post_job("session-002", kind="v1_analyse")
+        self.assertEqual((status, body["code"]), (409, "outputs_exist"))
+
+    def test_one_active_job_per_session_across_kinds(self):
+        status, first = self.post_job("session-003", kind="v2_build")
+        self.assertEqual(status, 202)
+        self.wait_for(first["id"], ("running",))
+        status, body = self.post_job("session-003", kind="v1_analyse")
+        self.assertEqual((status, body["code"]), (409, "job_active"))
+        jobs.cancel_job(first["id"])
+        self.wait_for(first["id"], ("cancelled",))
+
+    def test_regenerate_adds_the_matching_flag(self):
+        base = {"person": "demo_person", "session": "session-001", "regenerate": True}
+        self.assertIn("--force", jobs.default_command({**base, "kind": "v1_analyse"}))
+        self.assertIn("--regenerate-v2", jobs.default_command({**base, "kind": "v2_build"}))
+        self.assertNotIn("--force", jobs.default_command({**base, "kind": "v1_extract"}))
+
+    def test_worker_output_is_unbuffered(self):
+        self.assertEqual(jobs.worker_env()["PYTHONUNBUFFERED"], "1")
+
+
+class ProgressParsingTests(unittest.TestCase):
+    def test_extraction_progress_is_per_frame(self):
+        state = {}
+        self.assertEqual(jobs.parse_progress("v1_extract", "Total frames: 200", state), ("extract", 0.0))
+        self.assertEqual(jobs.parse_progress("v1_extract", "Processed: 100", state), ("extract", 0.5))
+        self.assertEqual(jobs.parse_progress("v1_extract", "Processed: 300", state), ("extract", 0.99))
+        self.assertEqual(jobs.parse_progress("v1_extract", "Processing completed!", state), ("publish", 0.99))
+        self.assertIsNone(jobs.parse_progress("v1_extract", "FPS: 30.0", state))
+
+    def test_analysis_and_build_markers(self):
+        self.assertEqual(jobs.parse_progress("v1_analyse", "CSV created: x", {}), ("assemble", 0.25))
+        self.assertEqual(jobs.parse_progress("v1_analyse", "Metadata: x", {}), ("verify", 0.9))
+        self.assertEqual(jobs.parse_progress("v2_build", "Extracting pose landmarks...", {}), ("extract", 3 / 6))
+        self.assertIsNone(jobs.parse_progress("v2_build", "unrelated line", {}))
+
+    def test_partly_written_frames_are_reported_for_extraction(self):
+        tmp = Path(tempfile.mkdtemp(prefix="leftover_"))
+        try:
+            (tmp / "frames").mkdir()
+            (tmp / "frames" / "frame_000000.jpg").write_bytes(b"x")
+            self.assertEqual(jobs.leftovers(tmp, "v1_extract"), ["frames/ (partly written)"])
+            (tmp / "facial_data.json").write_text("[]", encoding="utf-8")
+            self.assertEqual(jobs.leftovers(tmp, "v1_extract"), [])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class ReadTests(P4TestCase):

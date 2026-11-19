@@ -1,21 +1,27 @@
-"""Job system for V2 builds (phase P4).
+"""Job system for long-running work on recordings (phases P4 and P4b).
 
-A job runs the existing command-line V2 build (src/extraction/build_v2_session.py) in a separate Python
-process, so a MediaPipe crash cannot take down the API. The job record is kept in a small SQLite database
-under logs/. The dataset files are written only by the existing writer, never by this module.
+Each job runs an existing command-line script in a separate Python process, so a MediaPipe crash cannot take
+down the API. Job records are kept in a small SQLite database under logs/. The dataset files are written only
+by those scripts, never by this module.
+
+Kinds:
+  v2_build    src/extraction/build_v2_session.py   (V2 Pose build; --regenerate-v2 replaces V2 data)
+  v1_extract  src/analysis/extract_faces.py         (V1 face extraction; refuses existing data, no regenerate)
+  v1_analyse  src/analysis/analyze_faces.py         (V1 blendshape and motion outputs; --force regenerates)
 
 Lifecycle: queued -> running -> succeeded | failed | cancelled, and interrupted when the API restarts while a
-job is active. Progress is reported per stage (validate, model, extract, assemble, publish, verify). It is not
-per frame.
+job is active. Progress is per frame for v1_extract (from the script's "Processed" lines) and per stage for the
+other kinds.
 
-Concurrency: a unique index allows one active job per (person, session, kind). A session with the writer lock
-(.v2-lock) present is refused. Mutating routes require the API token (see api/main.py).
+Concurrency: one active job per session across all kinds, enforced by a unique index. A session with the
+writer lock (.v2-lock) present is refused. Mutating routes require the API token (see api/main.py).
 """
 
 from __future__ import annotations
 
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import subprocess
@@ -27,22 +33,28 @@ from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
-_ANALYSIS = ROOT / "src" / "analysis"
-if str(_ANALYSIS) not in sys.path:
-    sys.path.insert(0, str(_ANALYSIS))
+for _p in (ROOT / "src" / "analysis", ROOT / "src" / "extraction"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 import project_paths as pp  # noqa: E402
 from schema_v2 import session_layout  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
+from facial_analyzer import make_session, motion_output_paths  # noqa: E402
+from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
-KINDS = ("v2_build",)
+KINDS = ("v2_build", "v1_extract", "v1_analyse")
+SCRIPTS = {
+    "v2_build": ROOT / "src" / "extraction" / "build_v2_session.py",
+    "v1_extract": ROOT / "src" / "analysis" / "extract_faces.py",
+    "v1_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
+}
 ACTIVE = ("queued", "running")
-TERMINAL = ("succeeded", "failed", "cancelled", "interrupted")
 LOCK_FILE = ".v2-lock"
 LEFTOVER_PREFIXES = (".v2-staging-", ".v2-previous-")
 
-# Stage markers in the CLI's printed output, in order. Progress is the stage's position in this list.
-STAGE_MARKERS = (
+V2_STAGES = ("validate", "model", "extract", "assemble", "publish", "verify")
+V2_MARKERS = (
     ("Video:", "validate"),
     ("Pose Landmarker FULL loaded", "model"),
     ("Extracting pose", "extract"),
@@ -50,15 +62,21 @@ STAGE_MARKERS = (
     ("Publishing", "publish"),
     ("V2 session published", "verify"),
 )
-STAGES = tuple(stage for _marker, stage in STAGE_MARKERS)
+V1_ANALYSE_MARKERS = (
+    ("CSV created:", "assemble", 0.25),
+    ("Motion outputs:", "publish", 0.6),
+    ("Metadata:", "verify", 0.9),
+)
 
 EXIT_MESSAGES = {
-    0: None,
-    1: "the build failed; see the job log",
-    2: "refused by the build checks; see the job log",
+    1: "failed; see the job log",
+    2: "refused or invalid input; see the job log",
     3: "the Pose model failed its SHA-256 check",
     4: "version 1 files changed during the build and were rolled back",
 }
+
+_TOTAL_RE = re.compile(r"^Total frames:\s*(\d+)")
+_PROCESSED_RE = re.compile(r"^Processed:\s*(\d+)")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -77,8 +95,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     pid INTEGER,
     cancel_requested INTEGER NOT NULL DEFAULT 0
 );
-CREATE UNIQUE INDEX IF NOT EXISTS jobs_one_active
-    ON jobs(person, session, kind) WHERE state IN ('queued', 'running');
+DROP INDEX IF EXISTS jobs_one_active;
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_one_active_per_session
+    ON jobs(person, session) WHERE state IN ('queued', 'running');
 """
 
 
@@ -129,14 +148,6 @@ class JobStore:
             conn.execute(f"UPDATE jobs SET {assignments}, updated_at = ? WHERE id = ?",
                          (*fields.values(), _now(), job_id))
 
-    def active_for_session(self, person: str, session: str) -> list[dict]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM jobs WHERE person = ? AND session = ? AND state IN ('queued', 'running')",
-                (person, session),
-            ).fetchall()
-        return [_row(r) for r in rows]
-
 
 def _row(row) -> dict:
     d = dict(row)
@@ -145,29 +156,68 @@ def _row(row) -> dict:
     return d
 
 
-def _stage_for(line: str) -> str | None:
-    for marker, stage in STAGE_MARKERS:
-        if marker in line:
-            return stage
+def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | None:
+    """Stage and progress (0 to 1) for one line of a worker's output, or None if the line says nothing new.
+
+    state holds what earlier lines taught us (the total frame count for extraction).
+    """
+    if kind == "v2_build":
+        for marker, stage in V2_MARKERS:
+            if marker in line:
+                return stage, (V2_STAGES.index(stage) + 1) / len(V2_STAGES)
+        return None
+    if kind == "v1_extract":
+        m = _TOTAL_RE.match(line)
+        if m:
+            state["total"] = int(m.group(1))
+            return "extract", 0.0
+        m = _PROCESSED_RE.match(line)
+        if m:
+            total = state.get("total")
+            fraction = min(int(m.group(1)) / total, 0.99) if total else 0.0
+            return "extract", fraction
+        if line.startswith("Processing completed"):
+            return "publish", 0.99
+        return None
+    if kind == "v1_analyse":
+        for marker, stage, fraction in V1_ANALYSE_MARKERS:
+            if marker in line:
+                return stage, fraction
+        return None
     return None
 
 
-def leftovers(dataset_dir: Path) -> list[str]:
-    """Names of staging, previous and lock items in a session folder. They are reported, never removed here."""
+def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
+    """Names of staging, previous and lock items, and a partly written frames folder from an interrupted
+    extraction. They are reported, never removed here."""
     if not dataset_dir.is_dir():
         return []
     names = []
     for p in sorted(dataset_dir.iterdir()):
         if p.name == LOCK_FILE or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
+    frames = dataset_dir / "frames"
+    if kind == "v1_extract" and not (dataset_dir / "facial_data.json").exists() \
+            and frames.is_dir() and any(frames.iterdir()):
+        names.append("frames/ (partly written)")
     return names
 
 
 def default_command(job: dict) -> list[str]:
-    cmd = [sys.executable, str(ROOT / "src" / "extraction" / "build_v2_session.py"), job["person"], job["session"]]
+    cmd = [sys.executable, str(SCRIPTS[job["kind"]]), job["person"], job["session"]]
     if job["regenerate"]:
-        cmd.append("--regenerate-v2")
+        if job["kind"] == "v2_build":
+            cmd.append("--regenerate-v2")
+        elif job["kind"] == "v1_analyse":
+            cmd.append("--force")
     return cmd
+
+
+def worker_env() -> dict:
+    """Output must not be buffered, or progress lines would arrive only when the job ends."""
+    env = dict(os.environ)
+    env["PYTHONUNBUFFERED"] = "1"
+    return env
 
 
 class JobRunner:
@@ -190,7 +240,7 @@ class JobRunner:
             log.write(f"$ {' '.join(cmd)}\n")
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-            errors="replace", bufsize=1, cwd=str(ROOT),
+            errors="replace", bufsize=1, cwd=str(ROOT), env=worker_env(),
         )
         with self._lock:
             self._procs[job["id"]] = proc
@@ -209,20 +259,22 @@ class JobRunner:
 
     def _watch(self, job: dict, proc: subprocess.Popen) -> None:
         job_id = job["id"]
+        seen: dict = {}
         with open(self.log_path(job_id), "a", encoding="utf-8") as log:
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
-                stage = _stage_for(line)
-                if stage:
-                    self.store.update(job_id, stage=stage, progress=(STAGES.index(stage) + 1) / len(STAGES))
+                update = parse_progress(job["kind"], line.rstrip("\n"), seen)
+                if update:
+                    stage, progress = update
+                    self.store.update(job_id, stage=stage, progress=progress)
             code = proc.wait()
         proc.stdout.close()
         with self._lock:
             self._procs.pop(job_id, None)
         current = self.store.get(job_id)
         dataset = pp.session_dataset_dir(job["person"], job["session"])
-        left = leftovers(dataset)
+        left = leftovers(dataset, job["kind"])
         if current and current["cancel_requested"]:
             state, message = "cancelled", "cancelled by user"
         elif code == 0:
@@ -231,8 +283,8 @@ class JobRunner:
             state, message = "failed", EXIT_MESSAGES.get(code, f"exited with code {code}")
         if state != "succeeded" and left:
             message = f"{message}; leftover items in the session folder (not removed): {', '.join(left)}"
-        self.store.update(job_id, state=state, exit_code=code, message=message, pid=None,
-                          progress=1.0 if state == "succeeded" else current["progress"] if current else 0.0)
+        progress = 1.0 if state == "succeeded" else (current["progress"] if current else 0.0)
+        self.store.update(job_id, state=state, exit_code=code, message=message, pid=None, progress=progress)
 
 
 # ---- service object used by the API -------------------------------------------------------------
@@ -267,8 +319,10 @@ def token_ok(presented: str | None) -> bool:
     return presented is not None and hmac.compare_digest(presented, service().token)
 
 
-def check_v2_build(person: str, session: str, regenerate: bool) -> Path:
-    """The same refusals as the command line, checked before anything is queued. Returns the session folder."""
+def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
+    """The same refusals as the scripts, checked before anything is queued."""
+    if kind not in KINDS:
+        raise ApiError("invalid_request", f"unknown job kind: {kind!r}", 400)
     _check_person(person)
     if not pp.is_valid_session(session):
         raise ApiError("invalid_name", "invalid session name", 400)
@@ -276,19 +330,33 @@ def check_v2_build(person: str, session: str, regenerate: bool) -> Path:
     dataset = pp.session_dataset_dir(person, session)
     if not video.is_file():
         raise ApiError("no_video", "the recording for this session is missing", 422)
-    if not (dataset / "facial_data.json").is_file():
-        raise ApiError("no_v1_data", "run the version 1 extraction for this session first", 422)
-    if session_layout(dataset) == "v2" and not regenerate:
-        raise ApiError("v2_exists", "a complete V2 dataset exists; set regenerate to replace it", 409)
     if (dataset / LOCK_FILE).exists():
         raise ApiError("writer_lock_present", "the writer lock is present; another run may be active or interrupted", 409)
-    return dataset
+
+    if kind == "v2_build":
+        if not (dataset / "facial_data.json").is_file():
+            raise ApiError("no_v1_data", "run the version 1 extraction for this session first", 422)
+        if session_layout(dataset) == "v2" and not regenerate:
+            raise ApiError("v2_exists", "a complete V2 dataset exists; set regenerate to replace it", 409)
+    elif kind == "v1_extract":
+        frames = dataset / "frames"
+        if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):
+            raise ApiError("v1_exists", "version 1 data already exists; extraction never overwrites it", 409)
+        try:
+            verify_model(get_spec("face"))
+        except Exception as exc:  # missing or changed model file: refuse, never load it
+            raise ApiError("model_integrity", f"the face model failed its check: {exc}", 503) from None
+    elif kind == "v1_analyse":
+        if not (dataset / "facial_data.json").is_file():
+            raise ApiError("no_v1_data", "run the version 1 extraction for this session first", 422)
+        outputs = [dataset / "facial_blendshapes.csv", *motion_output_paths(make_session(person, session))]
+        existing = [p.name for p in outputs if p.exists()]
+        if existing and not regenerate:
+            raise ApiError("outputs_exist", f"analysis outputs exist ({', '.join(existing)}); set regenerate to replace them", 409)
 
 
 def create_job(person: str, session: str, kind: str, regenerate: bool) -> dict:
-    if kind not in KINDS:
-        raise ApiError("invalid_request", f"unknown job kind: {kind!r}", 400)
-    check_v2_build(person, session, regenerate)
+    check_job(kind, person, session, regenerate)
     svc = service()
     try:
         job = svc.store.insert(person, session, kind, regenerate)
@@ -319,7 +387,7 @@ def recover_interrupted() -> list[dict]:
         if job["state"] not in ACTIVE:
             continue
         dataset = pp.session_dataset_dir(job["person"], job["session"])
-        left = leftovers(dataset)
+        left = leftovers(dataset, job["kind"])
         pid_note = f" The worker process {job['pid']} may still be running." if job["pid"] else ""
         note = "the API restarted while this job was active." + pid_note
         if left:
