@@ -20,8 +20,16 @@ training is not implemented yet.
 | Streamlit dashboard: people and sessions, add or process recordings, delete data, six pages | Implemented |
 | Overwrite protection (`--force` for analysis, never for extraction) | Implemented |
 | Synthetic demo data generator | Implemented |
-| Pose Landmarker extraction and V2 session assembly | **Partially implemented:** tested with synthetic data and a fake detector; not validated on real recordings; no command-line or dashboard entry point yet ([docs/dataset_layout.md](docs/dataset_layout.md)) |
+| V2 schema and session writer (staging, manifest, lock, recovery, rollback) | Implemented |
+| Shared video frame reader | Implemented |
+| Model registry with SHA-256 verification before loading | Implemented |
+| Pose Landmarker extraction (FULL model, single subject) and V2 session assembly | **Implemented, tested with synthetic data and a fake detector; not validated on real recordings** |
+| Pose-to-V2 command-line entry point (`src/extraction/build_v2_session.py`) | **Implemented, tested with synthetic data; not run on a real recording** |
+| Rollback of a run's V2 output when a V1 file changes during processing | Implemented (CLI, exit code 4) |
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
+| V1-to-V2 migration command | **Not implemented** |
+| Body and Hand Motion dashboard page | **Not implemented** (placeholder page) |
+| Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
 | Neural network training and inference | **Not implemented** (`src/training/`, `src/inference/` are empty) |
@@ -144,6 +152,21 @@ can also upload a video and delete sessions or people (**Manage data**).
   python src/analysis/analyze_faces.py <person> session-001 --force
   ```
 - Analysis never modifies `facial_data.json` or the recording.
+
+## Pose-to-V2 command line (implemented; not validated on real recordings)
+
+```powershell
+python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+```
+
+- It processes an existing V1 session. The V1 facial data (`facial_data.json`) must already exist.
+- It verifies the Pose FULL model's SHA-256 before loading it. A missing or altered model is refused.
+- An existing V2 dataset is refused unless `--regenerate-v2` is given. The previous V2 dataset is kept, so it can be restored.
+- V1 files and the original video are never written.
+- If a V1 file changes during the run, the CLI rolls back that run's V2 output. It restores the previous V2 dataset if there was one, and otherwise removes the new V2 files. A refused or failed rollback is reported, and the files are left in place.
+- Exit codes: `0` published; `1` processing failed; `2` refused before processing; `3` model missing or wrong; `4` a V1 file changed (rollback attempted).
+
+Automated tests use synthetic data and a fake detector. Real-recording validation has not been done.
 
 ## Dashboard
 

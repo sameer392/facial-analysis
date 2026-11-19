@@ -121,7 +121,9 @@ src/
       04_Body_Motion.py       placeholder
       05_Dataset_Comparison.py
       06_Diagnostics.py
-  extraction/                 placeholders only (.gitkeep)
+  extraction/                 video_frames.py, model_registry.py, pose_extractor.py,
+                              v2_session_builder.py, build_v2_session.py (Pose-to-V2 CLI)
+                              (hand and audio extraction: not implemented)
   training/                   placeholders only (.gitkeep)
   inference/                  placeholders only (.gitkeep)
 tests/                        see section 13
@@ -189,12 +191,13 @@ Do not describe a phase as implemented when only some of its steps are.
 - **Stage 3, model registry: implemented** (`src/extraction/model_registry.py`). Verifies SHA-256 before any model is loaded. Records licence status as evidence, not clearance.
 - **Stage 4, Pose Landmarker extractor: implemented** (`src/extraction/pose_extractor.py`). Single subject only; missing detections are NaN rows. Tested with a fake detector; a one-off smoke test ran the real model on a blank synthetic video only.
 - **Stage 5, V2 session assembly: implemented** (`src/extraction/v2_session_builder.py`). Combines V1 facial data (read only) with the Pose output and writes through the V2 writer. Hands are recorded as an absent stream. Tested with synthetic data.
+- **Pose-to-V2 command-line entry point: implemented** (`src/extraction/build_v2_session.py`). Verifies the model's SHA-256, refuses an existing V2 dataset unless `--regenerate-v2` is given, always closes the detector, and checks that V1 files are unchanged. If a V1 file changes, it rolls back that run's V2 output and reports the outcome honestly. Tested with synthetic data and a fake detector only.
 - **Overall phase: incomplete.** Still pending:
   - hand extraction (the hand stream is currently recorded as absent)
-  - a command-line or dashboard entry point that runs the V2 Pose workflow end to end
-  - validation on real recordings (no real session has been written through the Pose workflow yet)
+  - validation on real recordings (no real session has been written through the Pose workflow yet; no recording has been approved for this)
   - the V1-to-V2 migration command
   - the Body and Hand Motion dashboard page
+  - PTS timestamp extraction (timestamps are currently FPS-derived)
   - model licence clearance for commercial use or redistribution (Pose FULL is partly verified; Face and Hand are unverified)
 
 ### Other status

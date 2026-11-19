@@ -137,6 +137,7 @@ Notes on the example:
 ## Limitations
 
 - Hand extraction is not implemented, so the hand stream is always absent.
-- No command-line or dashboard entry point runs this workflow yet.
+- The command-line entry point exists (see above), but the dashboard does not run this workflow.
+- No real recording has been processed through this workflow.
 - The workflow has been tested with synthetic data and a fake detector. A real recording has not yet been written through it.
 - Timestamps are `fps_derived`. Decoded presentation timestamps are not extracted.

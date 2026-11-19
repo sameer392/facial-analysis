@@ -4,7 +4,7 @@ Usage:
     python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
 
 Example:
-    python src/extraction/build_v2_session.py sameer_gupta session-001
+    python src/extraction/build_v2_session.py demo_person session-001
 
 Requires: the raw video recordings/raw/<person>/<session>.mp4, the V1 facial data
 datasets/<person>/<session>/facial_data.json (from extract_faces.py), and the Pose FULL model in
@@ -15,7 +15,11 @@ Exit codes:
     1  processing failed (video, extraction, build or write error); nothing published
     2  refused before processing (bad names, missing inputs, existing V2 without --regenerate-v2)
     3  model missing or SHA-256 mismatch; the model was not loaded
-    4  a version 1 file changed during the run (reported; the V2 output is not rolled back)
+    4  a version 1 file changed during the run. The V2 output of this run is rolled back with
+       rollback_v2: if there was a previous V2 dataset it is restored, otherwise the new V2 files
+       are removed. The CLI reports the outcome. If the rollback is refused or fails, it says so,
+       and the files are left in place. Restoration is reported only after the resulting session
+       layout has been checked.
 
 Version 1 files and the raw video are never written. The MediaPipe detector is closed on every path.
 """
