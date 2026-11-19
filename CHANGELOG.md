@@ -41,6 +41,12 @@ All notable changes to this project are recorded here. The format follows
 - Synthetic demo landmarks rotated in 2D while the matrix recorded 3D rotation. The demo now
   uses one consistent model.
 
+### Added (landmark overlay)
+- Dashboard landmark overlay modes: Hybrid (default), Wireframe, Contours, Points and Off, with
+  opacity, line-thickness and point-size controls. Implemented in `src/dashboard/overlay.py`.
+- Connection topology taken from MediaPipe's official `FaceLandmarksConnections`, read once.
+- `tests/test_overlay.py`: synthetic tests for topology, pixel mapping, each mode and invalid input.
+
 ### Added (validation)
 - `tests/test_scientific.py`: known rotations, translations, scale, missing matrices, aspect
   ratio, axis flip, neutral calibration, and motion metrics on regular and irregular timestamps.

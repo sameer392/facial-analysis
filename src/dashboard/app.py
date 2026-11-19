@@ -12,6 +12,7 @@ from dashboard_bootstrap import reload_project_modules  # noqa: E402
 reload_project_modules()  # pick up edits to helper modules without restarting the server
 
 from common import select_person_and_session  # noqa: E402  (sets up sys.path for analysis modules)
+from overlay import render_overlay  # noqa: E402
 from project_paths import (  # noqa: E402
     PROJECT_ROOT,
     create_person,
@@ -196,8 +197,19 @@ with st.sidebar:
 
 person_for_view, VIDEO_ID = select_person_and_session("view_")
 
+OVERLAY_MODE_LABELS = {
+    "hybrid": "Hybrid (faint mesh + contours)",
+    "wireframe": "Wireframe (full mesh)",
+    "contours": "Contours (eyes, brows, nose, lips, oval)",
+    "points": "Points (original dots)",
+    "off": "Off",
+}
+
 with st.sidebar:
-    draw_landmarks = st.checkbox("Draw facial landmarks", value=True)
+    overlay_mode = st.selectbox("Landmark overlay", list(OVERLAY_MODE_LABELS),
+                                index=0, format_func=lambda m: OVERLAY_MODE_LABELS[m])
+    overlay_opacity = st.slider("Overlay opacity", 0.0, 1.0, 0.8, 0.05)
+    line_thickness = st.slider("Line thickness", 1, 3, 1)
     point_radius = st.slider("Landmark point size", 1, 5, 2)
 
 DATASET_DIR = session_dataset_dir(person_for_view, VIDEO_ID)
@@ -231,14 +243,6 @@ def read_video_frame(path, frame_index):
     return frame, fps, frame_count
 
 
-def draw_points(frame, frame_data, radius=2):
-    h, w = frame.shape[:2]
-    for point in frame_data.get("landmarks", []):
-        x = int(float(point["x"]) * w)
-        y = int(float(point["y"]) * h)
-        if 0 <= x < w and 0 <= y < h:
-            cv2.circle(frame, (x, y), radius, (0, 255, 0), -1, cv2.LINE_AA)
-    return frame
 
 
 missing = [p for p in [video_path, json_path, csv_path] if not Path(p).is_file()]
@@ -296,9 +300,8 @@ row = df.iloc[min(frame_index, len(df) - 1)]
 
 try:
     original, fps, actual_frame_count = read_video_frame(video_path, frame_index)
-    marked = original.copy()
-    if draw_landmarks and frame_data.get("face_detected", False):
-        marked = draw_points(marked, frame_data, point_radius)
+    marked = render_overlay(original, frame_data, mode=overlay_mode, opacity=overlay_opacity,
+                            thickness=line_thickness, point_radius=point_radius)
 
     left, right = st.columns(2)
     with left:

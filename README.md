@@ -149,7 +149,7 @@ can also upload a video and delete sessions or people (**Manage data**).
 
 | Page | Contents |
 |---|---|
-| Main | Add or process a recording, delete data, frame viewer with landmark overlay, blendshape bars, movement charts, landmark coordinates |
+| Main | Add or process a recording, delete data, frame viewer with a landmark overlay (Hybrid, Wireframe, Contours, Points or Off, with opacity, thickness and point-size controls), blendshape bars, movement charts, landmark coordinates |
 | 01 Facial Analysis | Tracking quality, displacement, velocity, acceleration, neutral-face offset, blinks, head pose, jaw and mouth |
 | 02 3D Facial Analysis | 3D landmark view (raw or head-pose compensated), head pose angles, depth span |
 | 03 Audio Analysis | Placeholder. Not implemented |
