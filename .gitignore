@@ -20,3 +20,7 @@ checkpoints/*
 !checkpoints/.gitkeep
 logs/*
 !logs/.gitkeep
+
+# Local server logs (not project data)
+api.log
+*.log
