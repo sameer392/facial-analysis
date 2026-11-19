@@ -158,7 +158,7 @@ Streamlit remains available on port 8501 throughout. The Next.js app runs on por
 | P4 | Job system: extraction, analysis, V2 build, progress, cancel, locks | Synthetic job tests: success, failure, cancel, concurrent refusal, restart handling; no HTTP request blocks |
 | P5 | Model registry, integrity and licensing page, logs, settings | Hash checks match `model_registry`; licence status shown as recorded, never as cleared |
 | P6 | Audio and Hand pages (placeholders, then real pages when those layers exist) | Shown as not implemented until the Python layers exist |
-| P7 | Retire Streamlit | Only after P0–P5 pass, with a written sign-off |
+| P7 | Remove Streamlit completely | Decision: the end state is Next.js only, with no Streamlit kept in the project. Removal happens only after P0–P5 pass, with a written sign-off. The Streamlit code, dependencies and documentation are then deleted in one reviewed change. |
 
 Each phase is committed locally, with its tests and documentation, and is pushed only with approval.
 
