@@ -84,3 +84,6 @@ All notable changes to this project are recorded here. The format follows
 The project was developed locally before publication: MediaPipe face landmark extraction,
 blendshape and transformation-matrix export to JSON and CSV, motion analysis, and a Streamlit
 dashboard for a single presenter. No tagged release exists yet.
+
+- Pose visibility gate: joints outside the frame with visibility below 0.5 are treated as not visible for analysis (see docs/validation.md section 9). The stored arrays are unchanged.
+

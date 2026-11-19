@@ -135,3 +135,15 @@ These measure tracking, not motion. A session can score 100 and still give a poo
   convention itself.
 - Saved outputs in `datasets/` were produced by the previous formula. Regenerate them with
   `analyze_faces.py <person> <session> --force`.
+
+## 9. Pose visibility gate (analysis step)
+
+Pose landmarks whose normalised x or y lies outside [0, 1] are treated as not visible, and their
+coordinates are set to NaN, unless their visibility is at least 0.5. Joints inside the frame are
+kept whatever their visibility. Visibility and presence are kept as recorded.
+
+- Implemented in `src/analysis/pose_gating.py`, and tested in `tests/test_pose_gating.py`.
+- It returns a derived copy. The stored V2 arrays are not changed.
+- The threshold of 0.5 is an empirical choice, not a validated constant.
+- On the first real recording (`sameer_gupta/session-003`), the gate removed 49.0% of joint samples. The hips and ankles were removed in every frame. The shoulders were kept in every frame, and the elbows in about 80%.
+- Visibility is the model's own estimate. It has not been checked against manual annotation.
