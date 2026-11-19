@@ -1,16 +1,31 @@
-"""FastAPI application for the Next.js migration (phase P0: read-only).
+"""FastAPI application for the Next.js migration.
 
 Run locally (Windows PowerShell, from the project folder):
     ./.venv/Scripts/uvicorn.exe api.main:app --host 127.0.0.1 --port 8000
 
-Only GET routes exist in P0. The server binds to 127.0.0.1 by design. Nothing is written.
+Read routes (phases P0 to P3) only read. The job routes (phase P4) are the only writes: they start the existing
+V2 build command as a separate process, and require the API token in the X-Facial-Token header. The token is
+printed when the server starts (or set FACIAL_API_TOKEN). The server binds to 127.0.0.1 by design.
 """
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, Response
+from contextlib import asynccontextmanager
 
-from api import catalog, v1_data, v2_data
+from fastapi import Depends, FastAPI, Header
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
+
+from api import catalog, jobs, v1_data, v2_data
 from api.catalog import ApiError
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    interrupted = jobs.recover_interrupted()
+    if interrupted:
+        print(f"Marked {len(interrupted)} unfinished job(s) as interrupted.")
+    print(f"API token for mutating requests (X-Facial-Token): {jobs.service().token}")
+    yield
+
 
 app = FastAPI(
     title="Facial Analysis API",
@@ -18,7 +33,20 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url="/api/openapi.json",
+    lifespan=lifespan,
 )
+
+
+def require_token(x_facial_token: str | None = Header(default=None)) -> None:
+    if not jobs.token_ok(x_facial_token):
+        raise ApiError("unauthorized", "a valid API token is required (X-Facial-Token)", 401)
+
+
+class JobRequest(BaseModel):
+    person: str
+    session: str
+    kind: str = "v2_build"
+    regenerate: bool = False
 
 
 @app.exception_handler(ApiError)
@@ -104,3 +132,28 @@ def v2_overlay(person: str, session: str, index: int, threshold: float = v2_data
 @app.get("/api/persons/{person}/sessions/{session}/v1/head-pose")
 def v1_head_pose(person: str, session: str):
     return v2_data.head_pose(person, session)
+
+
+# ---- phase P4: jobs (the only writes; token required) --------------------------------------
+
+@app.post("/api/jobs", status_code=202, dependencies=[Depends(require_token)])
+def create_job(body: JobRequest):
+    return jobs.create_job(body.person, body.session, body.kind, body.regenerate)
+
+
+@app.get("/api/jobs")
+def list_jobs(limit: int = 50):
+    return jobs.service().store.list(min(max(limit, 1), 200))
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str):
+    job = jobs.service().store.get(job_id)
+    if job is None:
+        raise ApiError("not_found", "job not found", 404)
+    return job
+
+
+@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(require_token)])
+def cancel_job(job_id: str):
+    return jobs.cancel_job(job_id)

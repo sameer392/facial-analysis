@@ -144,11 +144,12 @@ class HttpP2Tests(P2TestCase):
         self.assertIn("quality", body)
         status, body = call(app, "GET", "/api/persons/demo_person/sessions/session-009/v1/summary")
         self.assertEqual(status, 404)
-        methods = set()
+        # only the job routes (phase P4) may write; every other API route is read-only
+        writes = set()
         for route in app.routes:
-            if route.path.startswith("/api"):
-                methods |= set(getattr(route, "methods", set()))
-        self.assertTrue(methods <= {"GET", "HEAD"}, methods)
+            if route.path.startswith("/api") and not route.path.startswith("/api/jobs"):
+                writes |= set(getattr(route, "methods", set())) - {"GET", "HEAD"}
+        self.assertEqual(writes, set())
 
 
 if __name__ == "__main__":
