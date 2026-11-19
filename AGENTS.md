@@ -121,6 +121,9 @@ src/
       04_Body_Motion.py       placeholder
       05_Dataset_Comparison.py
       06_Diagnostics.py
+  api/                        Next.js migration, phase P0 (read-only): main.py (FastAPI app),
+                              catalog.py (health, persons, sessions). Planned, not implemented:
+                              the web app, write endpoints, job system (docs/proposals/nextjs_migration.md)
   extraction/                 video_frames.py, model_registry.py, pose_extractor.py,
                               v2_session_builder.py, build_v2_session.py (Pose-to-V2 CLI)
                               (hand and audio extraction: not implemented)
@@ -199,6 +202,12 @@ Do not describe a phase as implemented when only some of its steps are.
   - the Hand part of the Body and Hand Motion dashboard page, and a dashboard button that generates pose data (the Body Motion page is a read-only viewer of existing V2 sessions)
   - PTS timestamp extraction (timestamps are currently FPS-derived)
   - model licence clearance for commercial use or redistribution (Pose FULL is partly verified; Face and Hand are unverified)
+
+### Next.js migration status
+
+- **Phase P0, read-only Python API: implemented** (`api/main.py`, `api/catalog.py`). Routes: `GET /api/health`, `GET /api/persons`, `GET /api/persons/{person}/sessions`. Names are validated, errors carry a code and status, and no request writes to disk. Run with `uvicorn api.main:app --host 127.0.0.1 --port 8000`. Tested with synthetic data (11 tests).
+- **Not yet started:** the Next.js web app, write endpoints (uploads, jobs, deletes), the job system, and parity pages (phases P1 to P7 in the proposal).
+- Streamlit stays in the project until phase P7. The decided end state is Next.js only, with Streamlit removed.
 
 ### Other status
 

@@ -41,6 +41,12 @@ All notable changes to this project are recorded here. The format follows
 - Synthetic demo landmarks rotated in 2D while the matrix recorded 3D rotation. The demo now
   uses one consistent model.
 
+### Added (Next.js migration, phase P0: read-only API)
+- `api/main.py` and `api/catalog.py`: `GET /api/health`, `GET /api/persons`, and `GET /api/persons/{person}/sessions`. Read-only; names are validated; errors have a code and status; no absolute paths are returned.
+- `fastapi`, `uvicorn` and `pydantic` pinned in `requirements.txt`.
+- Tests: `tests/test_api_p0.py` (11 synthetic tests, including a check that no request writes to disk).
+- Migration proposal updated: Streamlit is removed completely at phase P7.
+
 ### Added (Phase 2 pose workflow, partially implemented)
 - Shared video frame reader (`src/extraction/video_frames.py`), strict about truncated or empty videos.
 - Model registry with SHA-256 verification before any model is loaded (`src/extraction/model_registry.py`).
