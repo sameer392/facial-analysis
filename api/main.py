@@ -7,9 +7,9 @@ Only GET routes exist in P0. The server binds to 127.0.0.1 by design. Nothing is
 """
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from api import catalog, v1_data
+from api import catalog, v1_data, v2_data
 from api.catalog import ApiError
 
 app = FastAPI(
@@ -70,3 +70,37 @@ def v1_landmarks(person: str, session: str, index: int, compensated: bool = Fals
 def comparison(person: str, sessions: str = ""):
     names = [s for s in sessions.split(",") if s]
     return v1_data.comparison(person, names)
+
+
+# ---- phase P3: V2 Pose and head-pose data for the web pages (read-only) -------------------
+
+@app.get("/api/persons/{person}/sessions/{session}/v2")
+def v2_info(person: str, session: str):
+    return v2_data.info(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v2/timeline")
+def v2_timeline(person: str, session: str):
+    return v2_data.timeline(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v2/pose")
+def v2_pose(person: str, session: str, start: int = 0, end: int = 1, threshold: float = v2_data.DEFAULT_THRESHOLD):
+    return v2_data.pose(person, session, start, end, threshold)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v2/frames/{index}/quality")
+def v2_quality(person: str, session: str, index: int, threshold: float = v2_data.DEFAULT_THRESHOLD):
+    return v2_data.quality(person, session, index, threshold)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v2/frames/{index}/overlay.jpg")
+def v2_overlay(person: str, session: str, index: int, threshold: float = v2_data.DEFAULT_THRESHOLD,
+               points: bool = True, skeleton: bool = True):
+    data = v2_data.overlay_jpeg(person, session, index, threshold, points, skeleton)
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/v1/head-pose")
+def v1_head_pose(person: str, session: str):
+    return v2_data.head_pose(person, session)
