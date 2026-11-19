@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- Next.js migration P6: Audio and Hands placeholder pages, driven by a read-only layer status route.
 - Next.js migration P5: Models, Logs and Settings pages and read-only API routes (model hash status, redacted job logs, settings without the token).
 - Next.js migration P4: V1 face extraction and V1 analysis job kinds, per-frame progress for extraction, and a kind selector on the Jobs page.
 - Next.js migration P4 (backend): job system for V2 builds with token-protected create and cancel routes, one active job per session, and restart handling that reports leftovers. Tested in `tests/test_api_p4.py`.
