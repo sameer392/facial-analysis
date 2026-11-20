@@ -29,6 +29,47 @@ const REGION_GROUPS: [string, string[]][] = [
 ];
 const REGION_NAMES = REGION_GROUPS.flatMap(([, names]) => names);
 
+const DEFAULT_LANDMARK_IDS = [1, 13, 14, 33, 61, 199, 263, 291];
+
+function fmt(v: number | null | undefined, digits = 5): string {
+  return v == null ? "n/a" : v.toFixed(digits);
+}
+
+function LandmarkTable({ ids, raw, comp }: { ids: number[]; raw: (number | null)[][] | undefined; comp: (number | null)[][] | undefined }) {
+  const row = (i: number) => (
+    <tr key={i} className="border-t border-[var(--border)]">
+      <td className="py-1 pr-3">{i}</td>
+      <td className="py-1 pr-3">{fmt(raw?.[i]?.[0])}</td>
+      <td className="py-1 pr-3">{fmt(raw?.[i]?.[1])}</td>
+      <td className="py-1 pr-3">{fmt(raw?.[i]?.[2])}</td>
+      <td className="py-1 pr-3">{fmt(comp?.[i]?.[0])}</td>
+      <td className="py-1 pr-3">{fmt(comp?.[i]?.[1])}</td>
+      <td className="py-1">{fmt(comp?.[i]?.[2])}</td>
+    </tr>
+  );
+  const head = (
+    <thead className="text-left text-[var(--muted)]">
+      <tr>
+        <th scope="col" className="py-2 pr-3 font-medium">ID</th>
+        <th scope="col" className="py-2 pr-3 font-medium">Raw x</th>
+        <th scope="col" className="py-2 pr-3 font-medium">Raw y</th>
+        <th scope="col" className="py-2 pr-3 font-medium">Raw z</th>
+        <th scope="col" className="py-2 pr-3 font-medium">Compensated x</th>
+        <th scope="col" className="py-2 pr-3 font-medium">Compensated y</th>
+        <th scope="col" className="py-2 font-medium">Compensated z</th>
+      </tr>
+    </thead>
+  );
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        {head}
+        <tbody>{ids.map(row)}</tbody>
+      </table>
+    </div>
+  );
+}
+
 const SECTIONS: [string, string][] = [
   ["summary", "Summary"],
   ["frame", "Video frame"],
@@ -78,6 +119,7 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
   const [opacity, setOpacity] = useState(0.8);
   const [thickness, setThickness] = useState(1);
   const [pointSize, setPointSize] = useState(2);
+  const [landmarkIds, setLandmarkIds] = useState<number[]>(DEFAULT_LANDMARK_IDS);
 
   const summary = useQuery({ queryKey: ["face-summary", person, session], queryFn: () => api.faceSummary(person, session) });
   const video = useQuery({ queryKey: ["face-video", person, session], queryFn: () => api.faceVideo(person, session) });
@@ -364,6 +406,33 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
             {compensated.isPending && !compensated.data ? <Loading label="Loading compensated landmarks…" /> : <Chart option={landmarkOption(compensated.data?.points, "Head-pose compensated (face-size units)")} label="Compensated landmarks" />}
           </div>
           <p className="mt-2 text-xs text-[var(--muted)]">Frames without a face have no points.</p>
+        </Card>
+        <Card title="Landmark coordinates for this frame">
+          {raw.data && raw.data.points.length > 0 ? (
+            <>
+              <label className="mb-3 flex max-w-md flex-col gap-1 text-sm">
+                Landmark IDs (hold Ctrl or Cmd to select several)
+                <select
+                  multiple
+                  size={8}
+                  value={landmarkIds.map(String)}
+                  onChange={(e) => setLandmarkIds(Array.from(e.target.selectedOptions, (o) => Number(o.value)))}
+                  className="rounded border border-[var(--border)] bg-transparent px-2 py-1"
+                >
+                  {raw.data.points.map((_, i) => <option key={i} value={i}>{i}</option>)}
+                </select>
+              </label>
+              <LandmarkTable ids={landmarkIds} raw={raw.data.points} comp={compensated.data?.points} />
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm underline">Show all {raw.data.points.length} landmarks</summary>
+                <div className="mt-3 max-h-[480px] overflow-auto">
+                  <LandmarkTable ids={raw.data.points.map((_, i) => i)} raw={raw.data.points} comp={compensated.data?.points} />
+                </div>
+              </details>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">No landmarks in this frame.</p>
+          )}
         </Card>
       </section>
     </div>
