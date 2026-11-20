@@ -257,3 +257,8 @@ async def job_progress_events(job_id: str):
         raise ApiError("not_found", "job not found", 404)
     return StreamingResponse(job_events.event_stream(job_id), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/face/topology")
+def face_topology():
+    return face_data.topology()

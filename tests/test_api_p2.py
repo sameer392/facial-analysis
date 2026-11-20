@@ -155,3 +155,17 @@ class HttpP2Tests(P2TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TopologyTests(unittest.TestCase):
+    def test_topology_has_the_mesh_and_coloured_regions(self):
+        from api import face_data
+        topo = face_data.topology()
+        self.assertGreater(len(topo["mesh"]["edges"]), 1000)
+        self.assertTrue(topo["mesh"]["colour"].startswith("#"))
+        self.assertIn("lips", topo["regions"])
+        for name, region in topo["regions"].items():
+            self.assertGreater(len(region["edges"]), 0, name)
+            self.assertRegex(region["colour"], r"^#[0-9a-f]{6}$")
+            for a, b in region["edges"]:
+                self.assertTrue(0 <= a < 478 and 0 <= b < 478)

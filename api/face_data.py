@@ -150,3 +150,31 @@ def comparison(person: str, sessions: list[str]) -> dict:
             shares[sid] = [_scalar(c / total) if total else None for c in counts]
         distributions[metric] = {"edges": [_scalar(e) for e in edges], "shares": shares}
     return {"sessions": rows, "distributions": distributions}
+
+
+_topology_cache: dict = {}
+
+
+def topology() -> dict:
+    """Face mesh and region edges (pairs of landmark indices) from MediaPipe, with the overlay's colours.
+
+    Read once. The same lists the Streamlit overlay uses, so the views match.
+    """
+    if not _topology_cache:
+        import overlay  # the existing overlay module (no Streamlit import)
+
+        topo = overlay.load_topology()
+
+        def as_pairs(arr) -> list[list[int]]:
+            return [[int(a), int(b)] for a, b in arr]
+
+        def hex_colour(bgr) -> str:
+            b, g, r = (int(v) for v in bgr)
+            return f"#{r:02x}{g:02x}{b:02x}"
+
+        _topology_cache["mesh"] = {"edges": as_pairs(topo["mesh"]), "colour": hex_colour(overlay.MESH_COLOUR)}
+        _topology_cache["regions"] = {
+            name: {"edges": as_pairs(topo[name]), "colour": hex_colour(colour)}
+            for name, colour in overlay.REGION_COLOURS.items()
+        }
+    return {"mesh": _topology_cache["mesh"], "regions": _topology_cache["regions"]}
