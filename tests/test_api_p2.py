@@ -208,3 +208,23 @@ class VideoInfoTests(P2TestCase):
         self.assertEqual(info["frames"], 5)
         self.assertAlmostEqual(info["fps"], 25.0, places=1)
         self.assertAlmostEqual(info["duration_s"], 0.2, places=2)
+
+
+class BlendshapeFrameTests(P2TestCase):
+    def test_frame_values_match_the_facial_data_record_sorted_highest_first(self):
+        import json
+        path = pp.session_dataset_dir("demo_person", "session-001") / "facial_data.json"
+        record = json.loads(path.read_text(encoding="utf-8"))[3]
+        result = face_data.blendshape_frame("demo_person", "session-001", 3)
+        self.assertEqual(result["index"], 3)
+        self.assertEqual(result["face_detected"], bool(record.get("face_detected", False)))
+        scores = [score for _, score in result["values"]]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertEqual(
+            {name: score for name, score in result["values"]},
+            {k: v for k, v in record.get("blendshapes", {}).items() if isinstance(v, (int, float))},
+        )
+
+    def test_out_of_range_frame_is_not_found(self):
+        with self.assertRaises(ApiError):
+            face_data.blendshape_frame("demo_person", "session-001", 10**6)

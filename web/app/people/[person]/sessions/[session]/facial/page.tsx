@@ -87,6 +87,24 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
     enabled: summary.isSuccess,
     placeholderData: keepPreviousData,
   });
+  const blendFrame = useQuery({
+    queryKey: ["face-blendshapes-frame", person, session, frame],
+    queryFn: () => api.faceBlendshapesFrame(person, session, frame),
+    enabled: summary.isSuccess,
+    placeholderData: keepPreviousData,
+  });
+
+  const topBlendshapes = useMemo<EChartsOption | null>(() => {
+    if (!blendFrame.data) return null;
+    const top = blendFrame.data.values.slice(0, 15).reverse();
+    return {
+      title: { text: "Top 15 blendshape scores for this frame", left: "center", textStyle: { fontSize: 13 } },
+      grid: { left: 150, right: 30, top: 40, bottom: 30 },
+      xAxis: { type: "value", min: 0, max: 1, name: "score" },
+      yAxis: { type: "category", data: top.map(([name]) => name), axisLabel: { fontSize: 11 } },
+      series: [{ type: "bar", data: top.map(([, score]) => score) }],
+    };
+  }, [blendFrame.data]);
 
   const timelineOption = useMemo<EChartsOption | null>(() => {
     if (!series.data) return null;
@@ -228,6 +246,16 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
           </p>
           <p className="mt-1 text-xs text-[var(--muted)]">The same frame is used for the landmark views further down.</p>
         </Card>
+        {topBlendshapes ? (
+          <div className="mt-6">
+            <Card title="Blendshape values at selected frame">
+              <Chart option={topBlendshapes} height={480} label="Top 15 blendshape scores for the selected frame" />
+              {blendFrame.data && blendFrame.data.values.length === 0 ? (
+                <p className="mt-2 text-sm text-[var(--muted)]">No blendshape scores for this frame.</p>
+              ) : null}
+            </Card>
+          </div>
+        ) : null}
       </section>
 
       <section id="timeline" className="scroll-mt-6">

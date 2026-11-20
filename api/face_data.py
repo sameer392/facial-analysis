@@ -254,3 +254,24 @@ def video_info(person: str, session: str) -> dict:
         "height": height,
         "duration_s": (frames / fps) if fps > 0 else None,
     }
+
+
+def blendshape_frame(person: str, session: str, index: int) -> dict:
+    """All blendshape scores for one frame, highest first (the Streamlit frame table, as JSON)."""
+    _check_session(person, session)
+    frames = _face_frames(person, session)
+    if not (0 <= index < len(frames)):
+        raise ApiError("not_found", "frame index out of range", 404)
+    record = frames[index]
+    values = []
+    for name, score in (record.get("blendshapes") or {}).items():
+        value = _scalar(score)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            values.append([name, value])
+    values.sort(key=lambda pair: pair[1], reverse=True)
+    return {
+        "index": index,
+        "time_s": _scalar(record.get("timestamp_ms", 0) / 1000.0),
+        "face_detected": bool(record.get("face_detected", False)),
+        "values": values,
+    }
