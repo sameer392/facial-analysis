@@ -180,6 +180,14 @@ class JobTests(JobCase):
         status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
         self.assertEqual((status, body["code"]), (409, "hand_exists"))
 
+    def test_placeholder_absent_hand_stream_does_not_block_a_new_job(self):
+        dataset = self.make_session()
+        (dataset / "metadata.json").write_text(json.dumps(
+            {"schema_version": "2.0", "streams": {"hands": {"detected_frames": 0, "status": "absent"}}}))
+        with mock.patch.object(jobs, "verify_model", return_value=None):
+            status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
+        self.assertEqual(status, 202, body)
+
     def test_model_failure_is_refused_without_loading_the_model(self):
         self.make_session()
         with mock.patch.object(jobs, "verify_model", side_effect=RuntimeError("changed")):

@@ -395,12 +395,14 @@ def token_ok(presented: str | None) -> bool:
 
 
 def _hand_stream_state(dataset: Path) -> bool:
-    """True when the session metadata already records a hand stream (any stage)."""
+    """True when hand outputs exist. A pose build writes the hand stream as "absent" or "not run" placeholders,
+    which are not outputs."""
     try:
         meta = json.loads((dataset / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    return bool(meta.get("streams", {}).get("hands"))
+    hands = meta.get("streams", {}).get("hands")
+    return isinstance(hands, dict) and hands.get("status") not in (None, "absent", "not run")
 
 
 def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:

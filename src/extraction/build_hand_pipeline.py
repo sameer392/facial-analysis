@@ -48,11 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _hand_present(dataset: Path) -> bool:
+    """Hand outputs exist. Placeholder "absent" or "not run" streams written by a pose build do not count."""
     try:
         meta = json.loads((dataset / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    return bool(meta.get("streams", {}).get("hands"))
+    hands = meta.get("streams", {}).get("hands")
+    return isinstance(hands, dict) and hands.get("status") not in (None, "absent", "not run")
 
 
 def main(argv=None) -> int:
