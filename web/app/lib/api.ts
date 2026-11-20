@@ -251,6 +251,11 @@ async function send<T>(method: "POST" | "PUT", path: string, token: string, body
 
 export type DeleteResult = { deleted: boolean };
 
+export type FaceTopology = {
+  mesh: { edges: number[][]; colour: string };
+  regions: Record<string, { edges: number[][]; colour: string }>;
+};
+
 /** Uploads a recording and reports progress (0 to 1) while the bytes are sent. */
 function uploadWithProgress(path: string, token: string, file: Blob, onProgress?: (fraction: number) => void):
   Promise<{ person: string; session: string; bytes: number; uploaded: boolean }> {
@@ -297,6 +302,7 @@ export const api = {
     ),
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
+  faceTopology: () => get<FaceTopology>("/face/topology"),
   headPose: (person: string, session: string) =>
     get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/face/head-pose`),
   poseInfo: (person: string, session: string) =>
