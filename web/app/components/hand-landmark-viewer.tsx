@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, type HandLandmarkPage, type HandPoint } from "../lib/api";
 import { FINGERTIP_INDICES, HAND_CONNECTIONS, HAND_LANDMARK_NAMES, frameTimeMs, fmt } from "../lib/hand-data";
@@ -30,6 +30,19 @@ export function HandLandmarkViewer({
   const [serverOverlay, setServerOverlay] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const last = Math.max(totalFrames - 1, 0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+
+  // Playback steps through the frames at the recording's frame rate (times the speed). It stops at the last frame.
+  useEffect(() => {
+    if (!playing) return;
+    const rate = fps && fps > 0 ? fps : 10;
+    const id = window.setInterval(() => setFrame((f) => Math.min(f + 1, last)), 1000 / (rate * speed));
+    return () => window.clearInterval(id);
+  }, [playing, speed, fps, last]);
+  useEffect(() => {
+    if (frame >= last) setPlaying(false);
+  }, [frame, last]);
 
   const left = useQuery({
     queryKey: ["hand-frame", person, session, "left", frame],
@@ -52,6 +65,20 @@ export function HandLandmarkViewer({
           className="rounded border border-[var(--border)] px-2 py-1 disabled:opacity-50">Previous</button>
         <button type="button" onClick={() => setFrame((f) => clamp(f + 1))} disabled={frame >= last}
           className="rounded border border-[var(--border)] px-2 py-1 disabled:opacity-50">Next</button>
+        <button type="button" onClick={() => setPlaying((p) => !p)} disabled={last === 0}
+          aria-pressed={playing} className="rounded border border-[var(--border)] px-3 py-1 disabled:opacity-50">
+          {playing ? "Pause" : frame >= last && last > 0 ? "Play again" : "Play"}
+        </button>
+        <label className="flex items-center gap-2">
+          Speed
+          <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}
+            className="rounded border border-[var(--border)] bg-transparent px-2 py-1">
+            <option value={0.25}>0.25×</option>
+            <option value={0.5}>0.5×</option>
+            <option value={1}>1×</option>
+            <option value={2}>2×</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2">
           Go to frame
           <input
@@ -59,7 +86,7 @@ export function HandLandmarkViewer({
             min={0}
             max={last}
             value={frame}
-            onChange={(e) => setFrame(clamp(Number(e.target.value) || 0))}
+            onChange={(e) => { setPlaying(false); setFrame(clamp(Number(e.target.value) || 0)); }}
             className="w-24 rounded border border-[var(--border)] bg-transparent px-2 py-1"
           />
         </label>
@@ -69,7 +96,7 @@ export function HandLandmarkViewer({
         min={0}
         max={last}
         value={frame}
-        onChange={(e) => setFrame(clamp(Number(e.target.value)))}
+        onChange={(e) => { setPlaying(false); setFrame(clamp(Number(e.target.value))); }}
         aria-label="Frame"
         className="mb-4 w-full"
       />
@@ -110,7 +137,7 @@ export function HandLandmarkViewer({
           <HandStatus label="Left hand" page={left} />
           <HandStatus label="Right hand" page={right} />
           <p className="text-xs text-[var(--muted)]">
-            Detection status is the H1 result: valid, low_confidence (below 0.7 handedness score), or outside_frame
+            Detection status from the landmark extraction: valid, low_confidence (below 0.7 handedness score), or outside_frame
             (some landmarks are off the image). The model&apos;s score itself is not part of this API.
           </p>
           <FingerTable page={left.data} label="Left" />

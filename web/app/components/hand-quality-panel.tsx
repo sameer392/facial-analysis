@@ -96,7 +96,7 @@ export function HandQualityPanel({ person, session, summary }: { person: string;
 
       <Card title="Dataset validation">
         <p className="mb-3 text-sm text-[var(--muted)]">
-          Checks that the H1, H2 and H3 outputs agree with each other and with the manifest and metadata. It reads the
+          Checks that the landmark, tracking and gesture outputs agree with each other and with the manifest and metadata. It reads the
           whole session and changes nothing. Passing these checks shows the files are consistent; it does not show the
           results are accurate.
         </p>

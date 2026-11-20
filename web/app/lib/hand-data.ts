@@ -3,10 +3,10 @@
 import type { HandTablePage, Job } from "./api";
 
 export const HAND_STAGES: { key: string; label: string }[] = [
-  { key: "hand landmarks", label: "Hand landmarks (H1)" },
-  { key: "hand tracking", label: "Tracking and motion (H2)" },
-  { key: "gestures", label: "Gesture classification (H3)" },
-  { key: "validation", label: "Dataset validation (H4)" },
+  { key: "hand landmarks", label: "Hand landmarks" },
+  { key: "hand tracking", label: "Tracking and motion" },
+  { key: "gestures", label: "Gesture classification" },
+  { key: "validation", label: "Dataset validation" },
 ];
 
 export type StageState = "done" | "running" | "failed" | "cancelled" | "not run" | "pending";
