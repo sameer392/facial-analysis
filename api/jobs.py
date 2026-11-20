@@ -5,7 +5,7 @@ down the API. Job records are kept in a small SQLite database under logs/. The d
 by those scripts, never by this module.
 
 Kinds:
-  pose_build     src/extraction/build_pose_session.py  (pose data; --regenerate-v2 replaces it)
+  pose_build     src/extraction/build_pose_session.py  (pose data; --regenerate replaces it)
   face_extract   src/analysis/extract_faces.py        (face data; refuses existing data, no regenerate)
   face_analyse   src/analysis/analyze_faces.py        (blendshape and motion outputs; --force regenerates)
 
@@ -14,7 +14,7 @@ job is active. Progress is per frame for face_extract (from the script's "Proces
 other kinds.
 
 Concurrency: one active job per session across all kinds, enforced by a unique index. A session with the
-writer lock (.pose-lock, or the older .v2-lock) present is refused. Mutating routes require the API token (see api/main.py).
+writer lock (.pose-lock) present is refused. Mutating routes require the API token (see api/main.py).
 """
 
 from __future__ import annotations
@@ -215,7 +215,7 @@ def default_command(job: dict) -> list[str]:
     cmd = [sys.executable, str(SCRIPTS[kind]), job["person"], job["session"]]
     if job["regenerate"]:
         if kind == "pose_build":
-            cmd.append("--regenerate-v2")
+            cmd.append("--regenerate")
         elif kind == "face_analyse":
             cmd.append("--force")
     return cmd
@@ -344,8 +344,8 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     if kind == "pose_build":
         if not (dataset / "facial_data.json").is_file():
             raise ApiError("no_face_data", "run the face extraction for this session first", 422)
-        if session_layout(dataset) == "v2" and not regenerate:
-            raise ApiError("v2_exists", "pose data already exists; set regenerate to replace it", 409)
+        if session_layout(dataset) == "pose" and not regenerate:
+            raise ApiError("pose_exists", "pose data already exists; set regenerate to replace it", 409)
     elif kind == "face_extract":
         frames = dataset / "frames"
         if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):

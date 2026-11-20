@@ -88,12 +88,12 @@ Model files are kept in `models/mediapipe/`, which git ignores. They are never c
 ## Command-line entry point
 
 ```powershell
-python src/extraction/build_pose_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+python src/extraction/build_pose_session.py <person> <session> [--regenerate] [--models-dir DIR]
 ```
 
-It processes an existing face data session (which must already have `facial_data.json`) into a pose data session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the face data files. An existing pose dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
+It processes an existing face data session (which must already have `facial_data.json`) into a pose data session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the face data files. An existing pose dataset is refused unless `--regenerate` is given, and the previous one is kept for rollback.
 
-Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a face data file changed during the run. The pose data output of that run is rolled back with `rollback_v2`, which restores the previous pose dataset if there was one. If the rollback is refused (for example, because a pose data file was edited), the output says so and the files are left in place. Face data files are never changed by the rollback.
+Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a face data file changed during the run. The pose data output of that run is rolled back with `rollback_pose_session`, which restores the previous pose dataset if there was one. If the rollback is refused (for example, because a pose data file was edited), the output says so and the files are left in place. Face data files are never changed by the rollback.
 
 This has been tested with synthetic data and a fake detector only. It has not been run on a real recording.
 
@@ -110,7 +110,7 @@ sys.path.insert(0, "src/analysis")
 from extraction.pose_extractor import extract_pose_video, load_pose_detector
 from extraction.pose_builder import build_payload
 from extraction.video_frames import open_video_info
-from pose_writer import write_v2_session
+from pose_writer import write_pose_session
 
 video = Path("recordings/raw/demo_person/session-001.mp4")
 session_dir = Path("datasets/demo_person/session-001")
@@ -125,13 +125,13 @@ finally:
 payload = build_payload(dataset_dir=session_dir, pose=pose, fps=info.fps,
                         person="demo_person", session_id="session-001",
                         video_filename=video.name, video_size=(info.width, info.height))
-write_v2_session(session_dir, payload)
+write_pose_session(session_dir, payload)
 ```
 
 Notes on the example:
 
 - `fps` and the video size come from the video itself, so they are correct for any recording.
-- `write_v2_session` refuses to overwrite an existing pose dataset unless `regenerate=True` is passed.
+- `write_pose_session` refuses to overwrite an existing pose dataset unless `regenerate=True` is passed.
 - The example has not been run on a real recording. The synthetic tests cover the same steps with a fake detector.
 
 ## Limitations

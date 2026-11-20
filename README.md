@@ -163,12 +163,12 @@ can also upload a video and delete sessions or people (**Manage data**).
 ## Pose data command line (implemented; not validated on real recordings)
 
 ```powershell
-python src/extraction/build_pose_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+python src/extraction/build_pose_session.py <person> <session> [--regenerate] [--models-dir DIR]
 ```
 
 - It processes an existing face data session. The face data facial data (`facial_data.json`) must already exist.
 - It verifies the Pose FULL model's SHA-256 before loading it. A missing or altered model is refused.
-- An existing pose dataset is refused unless `--regenerate-v2` is given. The previous pose dataset is kept, so it can be restored.
+- An existing pose dataset is refused unless `--regenerate` is given. The previous pose dataset is kept, so it can be restored.
 - face data files and the original video are never written.
 - If a face data file changes during the run, the CLI rolls back that run's pose data output. It restores the previous pose dataset if there was one, and otherwise removes the new pose data files. A refused or failed rollback is reported, and the files are left in place.
 - Exit codes: `0` published; `1` processing failed; `2` refused before processing; `3` model missing or wrong; `4` a face data file changed (rollback attempted).

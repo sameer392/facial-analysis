@@ -11,7 +11,7 @@ export type Health = {
 export type SessionRow = {
   session_id: string;
   has_video: boolean;
-  layout: "v1" | "v2" | "incomplete_v2" | "none";
+  layout: "face" | "pose" | "pose_incomplete" | "none";
   layout_name: string;
 };
 

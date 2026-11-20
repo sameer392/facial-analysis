@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- Naming cleanup: layout codes are `face`, `pose` and `pose_incomplete`; `--regenerate-v2` is `--regenerate`; the write, rollback and recovery functions, the constants and the exception names use face and pose names. The stored schema string `2.0` is unchanged.
 - Naming migration, step 5: the older API paths (`/v1/…`, `/v2/…`), job codes, `.v2-` lock and temporary names, and the old class and module names are removed. Job rows saved with the older codes are updated when the job store opens.
 - Naming migration, step 4: test files and test names use the new terms (for example `test_pose_writer.py`); product docs (README, AGENTS.md, dataset layout, validation) use feature names, with code names in backticks unchanged.
 - Naming migration, step 3: the pose build script prints "pose data" wording, and the job parser reads the new markers only.

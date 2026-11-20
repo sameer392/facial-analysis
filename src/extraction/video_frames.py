@@ -6,7 +6,7 @@ so the video is read by this module and the frames are passed on. Nothing here c
 Errors are raised, never hidden: a missing, unreadable, empty or truncated video is reported
 with the file name, so no frames are silently dropped.
 
-Timestamps come from the frame rate (round(i * 1000 / fps), the same rule as the V2 schema),
+Timestamps come from the frame rate (round(i * 1000 / fps), the same rule as the pose data schema),
 because decoded presentation times are not yet extracted. The source is recorded as "fps_derived".
 Requires src/analysis on sys.path (for pose_schema), as the other modules do.
 """

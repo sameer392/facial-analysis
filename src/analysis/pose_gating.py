@@ -5,7 +5,7 @@ coordinates are set to NaN, unless its visibility is at least the threshold. Joi
 frame are kept whatever their visibility. Visibility and presence are kept as recorded, so the
 reason for a gated joint can still be seen.
 
-This is an analysis step. It returns a derived copy and never changes the stored V2 arrays, which
+This is an analysis step. It returns a derived copy and never changes the stored pose data arrays, which
 hold the raw model output. The threshold is an empirical choice, not a validated constant.
 """
 

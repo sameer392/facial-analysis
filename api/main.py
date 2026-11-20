@@ -4,7 +4,7 @@ Run locally (Windows PowerShell, from the project folder):
     ./.venv/Scripts/uvicorn.exe api.main:app --host 127.0.0.1 --port 8000
 
 Read routes (phases P0 to P3) only read. The job routes (phase P4) are the only writes: they start the existing
-V2 build command as a separate process, and require the API token in the X-Facial-Token header. The token is
+pose data build command as a separate process, and require the API token in the X-Facial-Token header. The token is
 printed when the server starts (or set FACIAL_API_TOKEN). The server binds to 127.0.0.1 by design.
 """
 
@@ -69,7 +69,7 @@ def sessions(person: str):
     return catalog.list_sessions(person)
 
 
-# ---- phase P2: V1 data for the analysis pages (read-only) ----------------------------------
+# ---- phase P2: face data data for the analysis pages (read-only) ----------------------------------
 
 @app.get("/api/persons/{person}/sessions/{session}/face/summary")
 def face_summary(person: str, session: str):
@@ -100,7 +100,7 @@ def comparison(person: str, sessions: str = ""):
     return face_data.comparison(person, names)
 
 
-# ---- phase P3: V2 Pose and head-pose data for the web pages (read-only) -------------------
+# ---- phase P3: pose data and head-pose data for the web pages (read-only) -------------------
 
 @app.get("/api/persons/{person}/sessions/{session}/pose")
 def pose_info(person: str, session: str):

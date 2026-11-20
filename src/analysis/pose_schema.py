@@ -1,10 +1,10 @@
-"""Version 2 dataset schema: constants, array specifications and validation.
+"""Pose data dataset schema: constants, array specifications and validation.
 
-Version 2 adds body and hand streams beside the version 1 facial outputs, in one session folder:
+Pose data adds body and hand streams beside the face data facial outputs, in one session folder:
 
     datasets/<person>/<session>/
         metadata.json          completion marker, written last
-        manifest.json          files created by the version 2 operation (for safe rollback)
+        manifest.json          files created by the pose data operation (for safe rollback)
         timeline.csv           frame index, timestamp and detection flags for every frame
         facial/   landmarks.npy, blendshapes.csv, transformation_matrices.npy
         body/     pose_landmarks.npy, pose_world_landmarks.npy
@@ -25,18 +25,18 @@ import numpy as np
 
 SCHEMA_VERSION = "2.0"
 SCHEMA_MAJOR = "2"
-METADATA_FILE = "metadata.json"        # written last; its presence marks a complete version 2 session
-MANIFEST_FILE = "manifest.json"        # lists every file created by the version 2 operation
+METADATA_FILE = "metadata.json"        # written last; its presence marks a complete pose data session
+MANIFEST_FILE = "manifest.json"        # lists every file created by the pose data operation
 TIMELINE_FILE = "timeline.csv"
-STAGING_SUFFIX = ".staging"            # v2 output is built here before publication
-PREVIOUS_SUFFIX = ".previous"          # the previous version 2 output, kept for rollback
+STAGING_SUFFIX = ".staging"            # pose data output is built here before publication
+PREVIOUS_SUFFIX = ".previous"          # the previous pose data output, kept for rollback
 
 N_FACE_LANDMARKS = 478
 N_POSE_LANDMARKS = 33
 N_HAND_LANDMARKS = 21
 N_BLENDSHAPES = 52
 
-# MediaPipe Face Landmarker blendshape categories, in the order used by the version 1 CSV.
+# MediaPipe Face Landmarker blendshape categories, in the order used by the face data CSV.
 BLENDSHAPE_NAMES = (
     "_neutral", "browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight",
     "cheekPuff", "cheekSquintLeft", "cheekSquintRight", "eyeBlinkLeft", "eyeBlinkRight",
@@ -102,7 +102,7 @@ def frame_timestamps_ms(n_frames: int, fps: float | None = None,
 
     Decoded presentation timestamps are preferred when they are available, match the frame count
     and strictly increase. Otherwise the timestamp is derived from the frame rate using the same rule
-    as version 1 extraction: round(i * 1000 / fps). The source is always recorded.
+    as face data extraction: round(i * 1000 / fps). The source is always recorded.
     """
     if n_frames < 0:
         raise ValueError("n_frames must not be negative")
@@ -234,9 +234,9 @@ def validate_manifest(manifest: dict) -> list[str]:
 
 
 def session_layout(session_dir) -> str:
-    """'v2' when metadata.json declares schema 2.x, 'v1' when only the version 1 outputs exist,
-    'incomplete_v2' when version 2 files exist without the metadata.json completion marker,
-    'none' otherwise. Readers must treat 'incomplete_v2' as absent."""
+    """'pose' when metadata.json declares schema 2.x, 'face' when only the face data outputs exist,
+    'pose_incomplete' when pose data files exist without the metadata.json completion marker,
+    'none' otherwise. Readers must treat 'pose_incomplete' as absent."""
     from pathlib import Path
 
     folder = Path(session_dir)
@@ -245,12 +245,12 @@ def session_layout(session_dir) -> str:
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             if str(meta.get("schema_version", "")).startswith(SCHEMA_MAJOR + "."):
-                return "v2"
+                return "pose"
         except (OSError, json.JSONDecodeError):
-            return "incomplete_v2"
-    v2_markers = [folder / "facial", folder / "body", folder / "hands", folder / "quality", folder / MANIFEST_FILE]
-    if any(p.exists() for p in v2_markers):
-        return "incomplete_v2"
+            return "pose_incomplete"
+    pose_markers = [folder / "facial", folder / "body", folder / "hands", folder / "quality", folder / MANIFEST_FILE]
+    if any(p.exists() for p in pose_markers):
+        return "pose_incomplete"
     if (folder / "facial_data.json").is_file():
-        return "v1"
+        return "face"
     return "none"

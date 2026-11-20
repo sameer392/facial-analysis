@@ -30,7 +30,7 @@ class ApiError(Exception):
 
 
 # Feature names shown to users. The layout codes above are kept for compatibility.
-LAYOUT_NAMES = {"v1": "face data", "v2": "pose data", "incomplete_v2": "pose data incomplete", "none": "no data"}
+LAYOUT_NAMES = {"face": "face data", "pose": "pose data", "pose_incomplete": "pose data incomplete", "none": "no data"}
 
 def _check_person(person: str) -> None:
     if not pp.is_valid_person(person):

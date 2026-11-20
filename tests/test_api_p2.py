@@ -1,4 +1,4 @@
-"""Phase P2 tests: the V1 data API must give the same numbers as the Python analysis (synthetic data)."""
+"""Phase P2 tests: the face data data API must give the same numbers as the Python analysis (synthetic data)."""
 
 import math
 import shutil
@@ -28,7 +28,7 @@ class P2TestCase(unittest.TestCase):
         pp.RECORDINGS_RAW = self.tmp / "recordings" / "raw"
         pp.DATASETS_ROOT = self.tmp / "datasets"
         face_data.clear_cache()
-        # two synthetic V1 sessions for one person (same generator as the demo)
+        # two synthetic face data sessions for one person (same generator as the demo)
         demo_data.generate_session(self.tmp, "session-001", demo_data.SESSIONS["session-001"])
         demo_data.generate_session(self.tmp, "session-002", demo_data.SESSIONS["session-002"])
 

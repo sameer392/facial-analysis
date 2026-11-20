@@ -20,9 +20,9 @@ const METRIC_LABEL: Record<string, string> = {
 export default function ComparePage({ params }: { params: Promise<{ person: string }> }) {
   const { person } = use(params);
   const sessions = useQuery({ queryKey: ["sessions", person], queryFn: () => api.sessions(person) });
-  const v1Sessions = (sessions.data ?? []).filter((s) => s.layout === "v1" || s.layout === "v2").map((s) => s.session_id);
+  const faceSessions = (sessions.data ?? []).filter((s) => s.layout === "face" || s.layout === "pose").map((s) => s.session_id);
   const [picked, setPicked] = useState<string[] | null>(null);
-  const chosen = picked ?? v1Sessions;
+  const chosen = picked ?? faceSessions;
   const comparison = useQuery({
     queryKey: ["comparison", person, chosen.join(",")],
     queryFn: () => api.comparison(person, chosen),
@@ -55,7 +55,7 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
 
   const toggle = (id: string) => {
     setPicked((current) => {
-      const base = current ?? v1Sessions;
+      const base = current ?? faceSessions;
       return base.includes(id) ? base.filter((s) => s !== id) : [...base, id];
     });
   };
@@ -70,12 +70,12 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
 
       {sessions.isPending ? <Loading label="Loading sessions…" /> : null}
       {sessions.isError ? <ErrorState message={sessions.error.message} /> : null}
-      {sessions.data && v1Sessions.length === 0 ? <Empty title="No analysed sessions" detail="Only sessions with face data can be compared." /> : null}
+      {sessions.data && faceSessions.length === 0 ? <Empty title="No analysed sessions" detail="Only sessions with face data can be compared." /> : null}
 
       <Card title="Sessions to compare">
         <fieldset className="flex flex-wrap gap-4 text-sm">
           <legend className="sr-only">Sessions</legend>
-          {v1Sessions.map((id) => (
+          {faceSessions.map((id) => (
             <label key={id} className="flex items-center gap-2">
               <input type="checkbox" checked={chosen.includes(id)} onChange={() => toggle(id)} />
               <span className="font-mono">{id}</span>

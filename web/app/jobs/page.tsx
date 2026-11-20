@@ -86,11 +86,11 @@ export default function JobsPage() {
   // Which sessions each kind can start on, following the script rules. The server checks again.
   const eligible = (layout: string) => {
     if (kind === "face_extract") return layout === "none";
-    return layout === "v1" || layout === "v2";
+    return layout === "face" || layout === "pose";
   };
   const startable = (sessions.data ?? []).filter((s) => s.has_video && eligible(s.layout));
   const selected = startable.find((s) => s.session_id === session);
-  const isRegeneration = (kind === "pose_build" && selected?.layout === "v2") || kind === "face_analyse";
+  const isRegeneration = (kind === "pose_build" && selected?.layout === "pose") || kind === "face_analyse";
 
   const create = useMutation({
     mutationFn: () => api.createJob(token, { kind, person, session, regenerate }),
@@ -184,7 +184,7 @@ export default function JobsPage() {
               <option value="">Choose a session</option>
               {startable.map((s) => (
                 <option key={s.session_id} value={s.session_id}>
-                  {s.session_id}{s.layout === "v2" ? " (pose data exists)" : s.layout === "v1" ? " (face data exists)" : ""}
+                  {s.session_id}{s.layout === "pose" ? " (pose data exists)" : s.layout === "face" ? " (face data exists)" : ""}
                 </option>
               ))}
             </select>

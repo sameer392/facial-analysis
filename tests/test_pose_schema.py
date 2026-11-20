@@ -1,4 +1,4 @@
-"""Tests for the version 2 schema (synthetic data only)."""
+"""Tests for the pose data schema (synthetic data only)."""
 
 import hashlib
 import json
@@ -236,19 +236,19 @@ class LayoutTests(unittest.TestCase):
 
     def test_face_data_session(self):
         (self.tmp / "facial_data.json").write_text("[]")
-        self.assertEqual(s2.session_layout(self.tmp), "v1")
+        self.assertEqual(s2.session_layout(self.tmp), "face")
 
     def test_pose_data_session_needs_metadata(self):
         (self.tmp / "metadata.json").write_text(json.dumps(good_metadata()))
-        self.assertEqual(s2.session_layout(self.tmp), "v2")
+        self.assertEqual(s2.session_layout(self.tmp), "pose")
 
     def test_pose_folders_without_metadata_are_incomplete(self):
         (self.tmp / "facial").mkdir()
-        self.assertEqual(s2.session_layout(self.tmp), "incomplete_v2")
+        self.assertEqual(s2.session_layout(self.tmp), "pose_incomplete")
 
     def test_unreadable_metadata_is_incomplete(self):
         (self.tmp / "metadata.json").write_text("{not json")
-        self.assertEqual(s2.session_layout(self.tmp), "incomplete_v2")
+        self.assertEqual(s2.session_layout(self.tmp), "pose_incomplete")
 
     def test_empty_folder(self):
         self.assertEqual(s2.session_layout(self.tmp), "none")
@@ -256,7 +256,7 @@ class LayoutTests(unittest.TestCase):
     def test_face_and_pose_can_coexist(self):
         (self.tmp / "facial_data.json").write_text("[]")
         (self.tmp / "metadata.json").write_text(json.dumps(good_metadata()))
-        self.assertEqual(s2.session_layout(self.tmp), "v2")
+        self.assertEqual(s2.session_layout(self.tmp), "pose")
 
 
 if __name__ == "__main__":

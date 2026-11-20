@@ -1,4 +1,4 @@
-"""Integration tests: Pose output and V1 facial data written into a V2 session (synthetic data only)."""
+"""Integration tests: Pose output and face data written into a pose data session (synthetic data only)."""
 
 import hashlib
 import json
@@ -21,7 +21,7 @@ import pose_schema as s2  # noqa: E402
 import pose_writer as w  # noqa: E402
 
 W, H, FPS, N = 64, 48, 10, 8
-V1_FILES = {
+FACE_FILES = {
     "facial_data.json": None,  # written by the fixture from synthetic frames
     "facial_blendshapes.csv": b"frame,timestamp_ms,face_detected\n0,0,True\n",
     "motion_metrics.csv": b"session_id,frame\nsession-001,0\n",
@@ -32,7 +32,7 @@ V1_FILES = {
 
 
 def face_facial_frames(n=N, missing_face=()):
-    """Synthetic frames in the same shape as the V1 extractor writes."""
+    """Synthetic frames in the same shape as the face data extractor writes."""
     frames = []
     for i in range(n):
         detected = i not in missing_face
@@ -78,18 +78,18 @@ class SessionTestCase(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def write_face(self, missing_face=()):
-        for name, data in V1_FILES.items():
+        for name, data in FACE_FILES.items():
             if name == "facial_data.json":
                 data = json.dumps(face_facial_frames(missing_face=missing_face)).encode("utf-8")
             (self.session / name).write_bytes(data)
 
     def hash_face(self):
-        return {name: hashlib.sha256((self.session / name).read_bytes()).hexdigest() for name in V1_FILES}
+        return {name: hashlib.sha256((self.session / name).read_bytes()).hexdigest() for name in FACE_FILES}
 
     def assert_face_unchanged(self):
         for name, digest in self.face_hashes.items():
             self.assertEqual(hashlib.sha256((self.session / name).read_bytes()).hexdigest(), digest,
-                             f"version 1 file changed: {name}")
+                             f"face data file changed: {name}")
 
     def build(self, pose=None, **kwargs):
         return sb.build_payload(
@@ -164,20 +164,20 @@ class MismatchTests(SessionTestCase):
         with self.assertRaises(sb.BuildError):
             self.build(pose=pose_result(n=N - 1))
         self.assertFalse((self.session / "metadata.json").exists())
-        self.assertFalse(any(p.name.startswith(".v2") for p in self.session.iterdir()))
+        self.assertFalse(any(p.name.startswith(".pose") for p in self.session.iterdir()))
         self.assert_face_unchanged()
 
 
 class WriteIntegrationTests(SessionTestCase):
     def test_full_session_writes_verifies_and_leaves_face_untouched(self):
         payload = self.build(pose=pose_result(missing=(4,)))
-        manifest = w.write_v2_session(self.session, payload)
+        manifest = w.write_pose_session(self.session, payload)
         self.assertEqual(w.verify_manifest(self.session, manifest, check_unexpected=True), [])
-        self.assertEqual(s2.session_layout(self.session), "v2")
+        self.assertEqual(s2.session_layout(self.session), "pose")
         self.assert_face_unchanged()
 
     def test_pose_on_disk_keeps_nan_rows_for_missing_detections(self):
-        w.write_v2_session(self.session, self.build(pose=pose_result(missing=(4,))))
+        w.write_pose_session(self.session, self.build(pose=pose_result(missing=(4,))))
         arr = np.load(self.session / "body" / "pose_landmarks.npy")
         self.assertEqual(arr.shape, (N, 33, 5))
         self.assertTrue(np.isnan(arr[4]).all())
@@ -185,25 +185,25 @@ class WriteIntegrationTests(SessionTestCase):
 
     def test_interrupted_publication_is_incomplete_and_recoverable(self):
         with self.assertRaises(w.SimulatedInterruption):
-            w.write_v2_session(self.session, self.build(), fail_at="publish")
-        self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
-        w.recover_incomplete_v2(self.session)
-        self.assertEqual(s2.session_layout(self.session), "v1")
+            w.write_pose_session(self.session, self.build(), fail_at="publish")
+        self.assertEqual(s2.session_layout(self.session), "pose_incomplete")
+        w.recover_incomplete_pose(self.session)
+        self.assertEqual(s2.session_layout(self.session), "face")
         self.assert_face_unchanged()
-        w.write_v2_session(self.session, self.build())
-        self.assertEqual(s2.session_layout(self.session), "v2")
+        w.write_pose_session(self.session, self.build())
+        self.assertEqual(s2.session_layout(self.session), "pose")
 
     def test_rollback_after_regeneration_restores_the_previous_pose_data(self):
-        w.write_v2_session(self.session, self.build())
-        w.write_v2_session(self.session, self.build(), regenerate=True)
-        w.rollback_v2(self.session)
-        self.assertEqual(s2.session_layout(self.session), "v2")  # previous version 2 restored
+        w.write_pose_session(self.session, self.build())
+        w.write_pose_session(self.session, self.build(), regenerate=True)
+        w.rollback_pose_session(self.session)
+        self.assertEqual(s2.session_layout(self.session), "pose")  # previous pose data restored
         self.assert_face_unchanged()
 
     def test_rollback_of_the_only_pose_data_leaves_face_data(self):
-        w.write_v2_session(self.session, self.build())
-        w.rollback_v2(self.session)
-        self.assertEqual(s2.session_layout(self.session), "v1")
+        w.write_pose_session(self.session, self.build())
+        w.rollback_pose_session(self.session)
+        self.assertEqual(s2.session_layout(self.session), "face")
         self.assert_face_unchanged()
 
 

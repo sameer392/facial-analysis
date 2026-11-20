@@ -1,7 +1,7 @@
-"""Support code for the Body Motion page: discovery and reading of V2 Pose sessions, joint states,
+"""Support code for the Body Motion page: discovery and reading of pose data sessions, joint states,
 the video overlay, and a tracking-quality summary.
 
-Nothing here imports Streamlit, so it can be tested directly. Stored V2 arrays are only read.
+Nothing here imports Streamlit, so it can be tested directly. Stored pose data arrays are only read.
 
 Coordinates: pose x and y are normalised to the video frame (x / width, y / height, origin top-left,
 y down). A pixel position is x * width and y * height. Joints whose coordinates lie outside [0, 1]
@@ -39,7 +39,7 @@ EDGE_COLOUR = (0, 200, 0)
 
 
 class PoseDataViewerError(Exception):
-    """A V2 session or its arrays cannot be read safely."""
+    """A pose data session or its arrays cannot be read safely."""
 
 
 
@@ -100,7 +100,7 @@ def load_timeline(session_dir, expected_frames: int | None = None) -> pd.DataFra
     return df
 
 
-def validate_v2_session(session_dir, person: str, session_id: str) -> PoseSession:
+def validate_pose_session(session_dir, person: str, session_id: str) -> PoseSession:
     session = Path(session_dir)
     try:
         meta = json.loads((session / "metadata.json").read_text(encoding="utf-8"))
@@ -123,8 +123,8 @@ def validate_v2_session(session_dir, person: str, session_id: str) -> PoseSessio
                      width=int(source["width"]), height=int(source["height"]), fps=float(source["fps"]))
 
 
-def discover_v2_sessions(root=None):
-    """Return (valid V2 sessions, rejected as (path, reason)). Version 1 sessions are not listed."""
+def discover_pose_sessions(root=None):
+    """Return (valid pose data sessions, rejected as (path, reason)). Face data sessions are not listed."""
     base = Path(root) if root is not None else pp.DATASETS_ROOT
     valid: list[PoseSession] = []
     rejected: list[tuple[Path, str]] = []
@@ -133,13 +133,13 @@ def discover_v2_sessions(root=None):
     for person_dir in sorted(p for p in base.iterdir() if p.is_dir() and pp.is_valid_person(p.name)):
         for session_dir in sorted(p for p in person_dir.iterdir() if p.is_dir() and pp.is_valid_session(p.name)):
             layout = session_layout(session_dir)
-            if layout in ("v1", "none"):
+            if layout in ("face", "none"):
                 continue
-            if layout == "incomplete_v2":
-                rejected.append((session_dir, "incomplete V2 output (metadata.json missing or unreadable)"))
+            if layout == "pose_incomplete":
+                rejected.append((session_dir, "incomplete pose data output (metadata.json missing or unreadable)"))
                 continue
             try:
-                valid.append(validate_v2_session(session_dir, person_dir.name, session_dir.name))
+                valid.append(validate_pose_session(session_dir, person_dir.name, session_dir.name))
             except PoseDataViewerError as exc:
                 rejected.append((session_dir, str(exc)))
     return valid, rejected

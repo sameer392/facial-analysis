@@ -42,13 +42,13 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
               {sessions.data.map((row) => (
                 <tr key={row.session_id} className="border-t border-[var(--border)]">
                   <td className="py-2 font-mono">
-                    {row.layout === "v1" || row.layout === "v2" ? (
+                    {row.layout === "face" || row.layout === "pose" ? (
                       <span className="flex flex-wrap gap-3">
                         {row.session_id}
                         <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/facial`}>facial</Link>
                         <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/diagnostics`}>diagnostics</Link>
                         <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/3d`}>3D</Link>
-                        {row.layout === "v2" ? (
+                        {row.layout === "pose" ? (
                           <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/body`}>body</Link>
                         ) : null}
                       </span>
@@ -58,7 +58,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
                     {row.has_video ? <Badge tone="good">present</Badge> : <Badge>missing</Badge>}
                   </td>
                   <td className="py-2">
-                    <Badge tone={row.layout === "v2" ? "good" : row.layout === "incomplete_v2" ? "warn" : "neutral"}>
+                    <Badge tone={row.layout === "pose" ? "good" : row.layout === "pose_incomplete" ? "warn" : "neutral"}>
                       {row.layout_name}
                     </Badge>
                   </td>

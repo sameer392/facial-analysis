@@ -1,4 +1,4 @@
-"""Tests for the V2 Body Motion viewer support code. Synthetic datasets in temporary folders only."""
+"""Tests for the pose data Body Motion viewer support code. Synthetic datasets in temporary folders only."""
 
 import hashlib
 import shutil
@@ -19,21 +19,21 @@ import pose_viewer as vv  # noqa: E402
 import pose_writer as w  # noqa: E402
 import pose_schema as s2  # noqa: E402
 import project_paths as pp  # noqa: E402
-import test_pose_writer as tsw  # noqa: E402  (synthetic V2 payload)
+import test_pose_writer as tsw  # noqa: E402  (synthetic pose data payload)
 
 N = 8
 W, H = 64, 48
 
 
 def write_pose(session_dir: Path, pose=None, seed=0) -> Path:
-    """Write a valid synthetic V2 session through the real writer, with optional pose overrides."""
+    """Write a valid synthetic pose data session through the real writer, with optional pose overrides."""
     payload = tsw.make_payload(n=N, seed=seed)
     if pose is not None:
         payload.arrays["body/pose_landmarks.npy"] = pose
     payload.metadata["source"]["width"] = W
     payload.metadata["source"]["height"] = H
     session_dir.mkdir(parents=True, exist_ok=True)
-    w.write_v2_session(session_dir, payload)
+    w.write_pose_session(session_dir, payload)
     return session_dir
 
 
@@ -59,7 +59,7 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_valid_pose_session_is_discovered(self):
         write_pose(self.root / "demo_person" / "session-001")
-        valid, rejected = vv.discover_v2_sessions(self.root)
+        valid, rejected = vv.discover_pose_sessions(self.root)
         self.assertEqual([(v.person, v.session_id) for v in valid], [("demo_person", "session-001")])
         self.assertEqual(rejected, [])
         self.assertEqual(valid[0].frames, N)
@@ -69,7 +69,7 @@ class DiscoveryTests(unittest.TestCase):
         session = self.root / "demo_person" / "session-002"
         session.mkdir(parents=True)
         (session / "facial_data.json").write_text("[]", encoding="utf-8")
-        valid, rejected = vv.discover_v2_sessions(self.root)
+        valid, rejected = vv.discover_pose_sessions(self.root)
         self.assertEqual(valid, [])
         self.assertEqual(rejected, [])
 
@@ -77,7 +77,7 @@ class DiscoveryTests(unittest.TestCase):
         session = self.root / "demo_person" / "session-003"
         write_pose(session)
         (session / "metadata.json").unlink()
-        valid, rejected = vv.discover_v2_sessions(self.root)
+        valid, rejected = vv.discover_pose_sessions(self.root)
         self.assertEqual(valid, [])
         self.assertEqual(len(rejected), 1)
         self.assertIn("incomplete", rejected[0][1])
@@ -85,19 +85,19 @@ class DiscoveryTests(unittest.TestCase):
     def test_tampered_file_is_rejected(self):
         session = write_pose(self.root / "demo_person" / "session-004")
         (session / "timeline.csv").write_text("changed\n", encoding="utf-8")
-        valid, rejected = vv.discover_v2_sessions(self.root)
+        valid, rejected = vv.discover_pose_sessions(self.root)
         self.assertEqual(valid, [])
         self.assertIn("manifest", rejected[0][1])
 
     def test_corrupt_metadata_is_rejected(self):
         session = write_pose(self.root / "demo_person" / "session-005")
         (session / "metadata.json").write_text("{not json", encoding="utf-8")
-        valid, rejected = vv.discover_v2_sessions(self.root)
+        valid, rejected = vv.discover_pose_sessions(self.root)
         self.assertEqual(valid, [])
         self.assertEqual(len(rejected), 1)
 
     def test_missing_root_gives_no_sessions(self):
-        valid, rejected = vv.discover_v2_sessions(self.tmp / "absent")
+        valid, rejected = vv.discover_pose_sessions(self.tmp / "absent")
         self.assertEqual((valid, rejected), ([], []))
 
 

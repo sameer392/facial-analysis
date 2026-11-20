@@ -1,4 +1,4 @@
-"""Read-only V2 Pose data and V1 head-pose data for the web pages (phase P3).
+"""Read-only pose data and face data head-pose data for the web pages (phase P3).
 
 Numbers come from src/dashboard/pose_viewer.py and src/analysis/facial_3d_analyzer.py, the same code the
 Streamlit pages use. NaN and infinity become null. Validation results are cached per session, keyed on
@@ -56,26 +56,26 @@ def _threshold(value: float) -> float:
     return float(value)
 
 
-def _v2_dir(person: str, session: str) -> Path:
+def _pose_dir(person: str, session: str) -> Path:
     _check_person(person)
     if not pp.is_valid_session(session):
         raise ApiError("invalid_name", "invalid session name", 400)
     folder = pp.session_dataset_dir(person, session)
     layout = session_layout(folder)
-    if layout == "incomplete_v2":
-        raise ApiError("incomplete_v2", "pose data is incomplete (metadata.json missing or unreadable)", 409)
-    if layout != "v2":
+    if layout == "pose_incomplete":
+        raise ApiError("pose_incomplete", "pose data is incomplete (metadata.json missing or unreadable)", 409)
+    if layout != "pose":
         raise ApiError("no_pose_data", "no pose data for this session", 404)
     return folder
 
 
 def _validated(person: str, session: str):
-    folder = _v2_dir(person, session)
+    folder = _pose_dir(person, session)
     meta_mtime = (folder / "metadata.json").stat().st_mtime_ns
-    key = ("v2", person, session, meta_mtime)
+    key = ("pose", person, session, meta_mtime)
     if key not in _cache:
         try:
-            info = vv.validate_v2_session(folder, person, session)
+            info = vv.validate_pose_session(folder, person, session)
             pose = vv.load_pose(folder)
             timeline = vv.load_timeline(folder, expected_frames=pose.shape[0])
         except vv.PoseDataViewerError as exc:
@@ -85,26 +85,26 @@ def _validated(person: str, session: str):
             _cache[key] = ("ok", info, pose, timeline)
     entry = _cache[key]
     if entry[0] == "invalid":
-        raise ApiError("v2_invalid", entry[1], 422)
+        raise ApiError("pose_invalid", entry[1], 422)
     return entry[1], entry[2], entry[3]
 
 
 def info(person: str, session: str) -> dict:
-    v2, _pose, _timeline = _validated(person, session)
+    pinfo, _pose, _timeline = _validated(person, session)
     return {
         "session_id": session,
         "valid": True,
-        "frames": v2.frames,
-        "width": v2.width,
-        "height": v2.height,
-        "fps": _scalar(v2.fps),
+        "frames": pinfo.frames,
+        "width": pinfo.width,
+        "height": pinfo.height,
+        "fps": _scalar(pinfo.fps),
         "joint_names": list(vv.joint_names()),
         "scope": "tracking only; does not measure the accuracy of the body motion",
     }
 
 
 def timeline(person: str, session: str) -> list[dict]:
-    _v2, _pose, tl = _validated(person, session)
+    _pinfo, _pose, tl = _validated(person, session)
     rows = []
     for record in tl.to_dict(orient="records"):
         rows.append({k: _scalar(v) if not isinstance(v, str) else v for k, v in record.items()})
@@ -132,7 +132,7 @@ def _joint_rows(frame_pose: np.ndarray, threshold: float) -> list[dict]:
 
 
 def pose(person: str, session: str, start: int, end: int, threshold: float) -> dict:
-    _v2, arr, _tl = _validated(person, session)
+    _pinfo, arr, _tl = _validated(person, session)
     threshold = _threshold(threshold)
     _frame_range(start, end, arr.shape[0])
     frames = [{"index": f, "joints": _joint_rows(arr[f], threshold)} for f in range(start, end)]
@@ -140,7 +140,7 @@ def pose(person: str, session: str, start: int, end: int, threshold: float) -> d
 
 
 def quality(person: str, session: str, frame: int, threshold: float) -> dict:
-    _v2, arr, tl = _validated(person, session)
+    _pinfo, arr, tl = _validated(person, session)
     threshold = _threshold(threshold)
     if not (0 <= frame < arr.shape[0]):
         raise ApiError("not_found", "frame index out of range", 404)
@@ -155,7 +155,7 @@ def quality(person: str, session: str, frame: int, threshold: float) -> dict:
 
 def overlay_jpeg(person: str, session: str, index: int, threshold: float,
                  show_points: bool, show_skeleton: bool) -> bytes:
-    v2, arr, _tl = _validated(person, session)
+    pinfo, arr, _tl = _validated(person, session)
     threshold = _threshold(threshold)
     if not (0 <= index < arr.shape[0]):
         raise ApiError("not_found", "frame index out of range", 404)

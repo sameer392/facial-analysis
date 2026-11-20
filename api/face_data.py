@@ -1,4 +1,4 @@
-"""Read-only V1 data for the web pages (phase P2). Numbers come from the existing Python analysis.
+"""Read-only face data data for the web pages (phase P2). Numbers come from the existing Python analysis.
 
 NaN and infinity are returned as null. Results are cached per session, keyed on the modification time
 of facial_data.json, so a regenerated session is recomputed. Nothing is written.

@@ -39,7 +39,7 @@ export default function RecordingsPage() {
                 </Link>
                 <span className="flex gap-2">
                   {r.has_video ? <Badge tone="good">video</Badge> : <Badge>no video</Badge>}
-                  <Badge tone={r.layout === "v2" ? "good" : "neutral"}>{r.layout_name}</Badge>
+                  <Badge tone={r.layout === "pose" ? "good" : "neutral"}>{r.layout_name}</Badge>
                 </span>
               </li>
             ))}

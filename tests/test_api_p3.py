@@ -1,4 +1,4 @@
-"""Phase P3 tests: V2 Pose and head-pose API routes must match the Python viewer and 3D code (synthetic data)."""
+"""Phase P3 tests: pose data and head-pose API routes must match the Python viewer and 3D code (synthetic data)."""
 
 import asyncio
 import json
@@ -22,7 +22,7 @@ import demo_data  # noqa: E402
 import facial_3d_analyzer as f3  # noqa: E402
 import facial_analyzer as fa  # noqa: E402
 import pose_viewer as vv  # noqa: E402
-import test_pose_viewer as tv  # noqa: E402  (synthetic V2 writer)
+import test_pose_viewer as tv  # noqa: E402  (synthetic pose data writer)
 from api import face_data, pose_data  # noqa: E402
 from api.catalog import ApiError  # noqa: E402
 from test_api_p0 import call  # noqa: E402
@@ -59,11 +59,11 @@ class P3TestCase(unittest.TestCase):
         pp.DATASETS_ROOT = self.tmp / "datasets"
         face_data.clear_cache()
         pose_data.clear_cache()
-        # V1 analysis data and a V2 session in the same folder, as the real layout has them
+        # face data analysis data and a pose data session in the same folder, as the real layout has them
         demo_data.generate_session(self.tmp, "session-001", demo_data.SESSIONS["session-001"])
         demo_data.generate_session(self.tmp, "session-002", demo_data.SESSIONS["session-002"])
-        self.v2_dir = pp.DATASETS_ROOT / PERSON / "session-001"
-        tv.write_pose(self.v2_dir)
+        self.pose_dir = pp.DATASETS_ROOT / PERSON / "session-001"
+        tv.write_pose(self.pose_dir)
         self.frames = tv.N
         self.write_video(pp.session_video(PERSON, "session-001"))
 
@@ -83,7 +83,7 @@ class P3TestCase(unittest.TestCase):
         writer.release()
 
     def stored_pose(self):
-        return np.load(self.v2_dir / "body" / "pose_landmarks.npy")
+        return np.load(self.pose_dir / "body" / "pose_landmarks.npy")
 
 
 class PoseParityTests(P3TestCase):
@@ -117,7 +117,7 @@ class PoseParityTests(P3TestCase):
 
     def test_quality_matches_the_viewer_summary(self):
         pose = self.stored_pose()
-        timeline = vv.load_timeline(self.v2_dir, expected_frames=self.frames)
+        timeline = vv.load_timeline(self.pose_dir, expected_frames=self.frames)
         result = pose_data.quality(PERSON, "session-001", 3, 0.5)
         expected = vv.quality_summary(pose, timeline, 0.5, 3)
         self.assertEqual(result["quality"]["pose_detected_frames"], expected["pose_detected_frames"])
@@ -176,10 +176,10 @@ class ErrorTests(P3TestCase):
         self.assertEqual((ctx.exception.status, ctx.exception.code), (404, "no_pose_data"))
 
     def test_invalid_pose_session_is_refused_with_reason(self):
-        (self.v2_dir / "body" / "pose_landmarks.npy").write_bytes(b"not a numpy file")
+        (self.pose_dir / "body" / "pose_landmarks.npy").write_bytes(b"not a numpy file")
         with self.assertRaises(ApiError) as ctx:
             pose_data.info(PERSON, "session-001")
-        self.assertEqual((ctx.exception.status, ctx.exception.code), (422, "v2_invalid"))
+        self.assertEqual((ctx.exception.status, ctx.exception.code), (422, "pose_invalid"))
 
     def test_p3_routes_respond_over_http(self):
         from api.main import app

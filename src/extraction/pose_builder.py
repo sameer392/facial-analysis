@@ -1,12 +1,12 @@
-"""Assemble a V2 session payload from V1 facial data and a Pose extraction result.
+"""Assemble a pose data session payload from face data and a Pose extraction result.
 
-Streams in a version 2 session:
-    facial  taken from the existing V1 facial_data.json (read only; V1 is never modified)
+Streams in a pose data session:
+    facial  taken from the existing face_data.json (read only; face data is never modified)
     body    Pose Landmarker FULL output from pose_extractor.PoseResult
     hands   not run yet: recorded as an absent stream, with NaN arrays and no detections
 
 The builder refuses to combine streams whose frame counts or timestamps differ. The writer
-(pose_writer.write_v2_session) does the validation, staging, manifest and publication.
+(pose_writer.write_pose_session) does the validation, staging, manifest and publication.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def _mediapipe_version() -> str:
 
 def build_payload(dataset_dir, pose: PoseResult, fps: float, person: str, session_id: str,
                   video_filename: str, video_size: tuple[int, int]) -> PoseDataPayload:
-    """Combine V1 facial data (in dataset_dir) with the Pose result into a PoseDataPayload."""
+    """Combine face data (in dataset_dir) with the Pose result into a PoseDataPayload."""
     width, height = video_size
     facial_session = Session(person=person, session_id=session_id, video_path=Path(video_filename),
                              dataset_dir=Path(dataset_dir), fps=float(fps))

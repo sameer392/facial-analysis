@@ -1,4 +1,4 @@
-"""Version 2 session writer: staging, validation, manifest, atomic publication, regeneration and rollback.
+"""Pose data session writer: staging, validation, manifest, atomic publication, regeneration and rollback.
 
 Publication order inside a session folder (datasets/<person>/<session>/):
 
@@ -10,9 +10,9 @@ Publication order inside a session folder (datasets/<person>/<session>/):
     6. complete    metadata.json is moved last. Its presence is the completion marker
 
 Interruption at any point leaves either no metadata.json (incomplete, and readers ignore it) or a
-complete session. recover_incomplete_v2() removes only files listed in the manifest of an unfinished
-operation and restores any previous version 2 dataset. rollback_v2() removes a completed version 2
-dataset the same way. Version 1 files and recordings are never written, moved or deleted.
+complete session. recover_incomplete_pose() removes only files listed in the manifest of an unfinished
+operation and restores any previous pose data dataset. rollback_pose_session() removes a completed pose data
+dataset the same way. Face data files and recordings are never written, moved or deleted.
 """
 
 from __future__ import annotations
@@ -56,13 +56,13 @@ TIMELINE_COLUMNS = ("frame", "timestamp_ms", "face_detected", "pose_detected",
                     "left_hand_detected", "right_hand_detected")
 BLENDSHAPE_COLUMNS = ("frame", "timestamp_ms", "face_detected") + tuple(BLENDSHAPE_NAMES)
 
-# Names used by version 1 at the session root. Version 2 must never write these.
-V1_PROTECTED_NAMES = frozenset({
+# Names used by face data at the session root. Pose data must never write these.
+FACE_PROTECTED_NAMES = frozenset({
     "facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
     "blink_events.csv", "tracking_quality.json", "calibration.json", "frames",
 })
-V2_DIRECTORIES = ("facial", "body", "hands", "quality")
-V2_ROOT_FILES = (TIMELINE_FILE, MANIFEST_FILE, METADATA_FILE)
+POSE_DIRECTORIES = ("facial", "body", "hands", "quality")
+POSE_ROOT_FILES = (TIMELINE_FILE, MANIFEST_FILE, METADATA_FILE)
 
 
 class PoseDataError(Exception):
@@ -89,7 +89,7 @@ FAIL_POINTS = ("arrays", "csv", "validate", "manifest", "publish", "metadata")
 
 @dataclass
 class PoseDataPayload:
-    """Everything needed to write one version 2 session.
+    """Everything needed to write one pose data session.
 
     arrays:          relative path -> numpy array (required and optional schema arrays)
     timeline_rows:   one dict per frame with TIMELINE_COLUMNS
@@ -111,9 +111,9 @@ class PoseDataPayload:
 
 # ---------------------------------------------------------------- helpers
 
-def is_v1_path(rel: str) -> bool:
-    """True when a relative path is a version 1 output: a root-level V1 name, or anything under frames/."""
-    return rel in V1_PROTECTED_NAMES or rel.split("/")[0] == "frames"
+def is_face_path(rel: str) -> bool:
+    """True when a relative path is a face data output: a root-level face data name, or anything under frames/."""
+    return rel in FACE_PROTECTED_NAMES or rel.split("/")[0] == "frames"
 
 
 def _rel_to_path(rel: str, root: Path) -> Path:
@@ -193,8 +193,8 @@ def prevalidate(payload: PoseDataPayload) -> int:
     n = len(payload.timeline_rows)
     issues = []
     for rel in payload.arrays:
-        if is_v1_path(rel):
-            issues.append(f"{rel} collides with a version 1 name")
+        if is_face_path(rel):
+            issues.append(f"{rel} collides with a face data name")
     for spec in ARRAY_SPECS:
         if spec.relative_path not in payload.arrays:
             issues.append(f"missing required array {spec.relative_path}")
@@ -333,15 +333,15 @@ def verify_manifest(root: Path, manifest: dict, check_unexpected: bool = False) 
             except (OSError, ValueError) as exc:
                 issues.append(f"unreadable array {rel}: {exc}")
     if check_unexpected:
-        for rel in _v2_files_on_disk(root):
+        for rel in _pose_files_on_disk(root):
             if rel not in listed:
                 issues.append(f"unexpected file not in manifest: {rel}")
     return issues
 
 
-def _v2_files_on_disk(root: Path) -> list[str]:
+def _pose_files_on_disk(root: Path) -> list[str]:
     found = []
-    for directory in V2_DIRECTORIES:
+    for directory in POSE_DIRECTORIES:
         folder = root / directory
         if folder.is_dir():
             for path in folder.rglob("*"):
@@ -371,16 +371,16 @@ def _previous_dirs(session: Path) -> list[Path]:
 # ---------------------------------------------------------------- publication
 
 def _move_previous(session: Path, manifest: dict | None) -> Path | None:
-    """Move the existing version 2 files aside. Nothing is deleted."""
+    """Move the existing pose data files aside. Nothing is deleted."""
     if manifest is None:
-        # Without a readable manifest we cannot tell which files are version 2 output, so refuse
+        # Without a readable manifest we cannot tell which files are pose data output, so refuse
         # rather than overwrite them. Nothing has been moved at this point.
         raise PoseDataError("existing pose data manifest is unreadable; refusing to replace the dataset")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     previous = session / f"{PREVIOUS_PREFIX}{stamp}-{uuid.uuid4().hex[:8]}"
     listed = [e["path"] for e in manifest.get("files", [])] + [MANIFEST_FILE, METADATA_FILE]
     for rel in listed:
-        if rel in V1_PROTECTED_NAMES:
+        if rel in FACE_PROTECTED_NAMES:
             raise PoseDataError(f"refusing to move a face data name: {rel}")
         src = _rel_to_path(rel, session)
         if src.is_file():
@@ -432,7 +432,7 @@ def _acquire_lock(session: Path) -> Path:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         raise PoseDataError(f"another pose data operation holds {lock}. If none is running, "
-                            "run recover_incomplete_v2 for this session.")
+                            "run recover_incomplete_pose for this session.")
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(f"pid={os.getpid()}\n")
     return lock
@@ -442,9 +442,9 @@ def _release_lock(session: Path) -> None:
     (session / LOCK_FILE).unlink(missing_ok=True)
 
 
-def write_v2_session(session_dir, payload: PoseDataPayload, regenerate: bool = False,
+def write_pose_session(session_dir, payload: PoseDataPayload, regenerate: bool = False,
                      fail_at: str | None = None) -> dict:
-    """Write one version 2 session under an exclusive lock. See _write_locked for the steps."""
+    """Write one pose data session under an exclusive lock. See _write_locked for the steps."""
     session = Path(session_dir)
     session.mkdir(parents=True, exist_ok=True)
     _acquire_lock(session)
@@ -461,9 +461,9 @@ def write_v2_session(session_dir, payload: PoseDataPayload, regenerate: bool = F
 
 def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = False,
                   fail_at: str | None = None) -> dict:
-    """Write one version 2 session. Returns the published manifest.
+    """Write one pose data session. Returns the published manifest.
 
-    regenerate=False raises PoseDataExistsError when a complete version 2 dataset already exists.
+    regenerate=False raises PoseDataExistsError when a complete pose data dataset already exists.
     regenerate=True moves the existing pose data files to a .pose-previous-* folder first.
     fail_at simulates an interruption at one stage (tests only).
     """
@@ -473,18 +473,18 @@ def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = Fals
     session.mkdir(parents=True, exist_ok=True)
 
     layout = session_layout(session)
-    if layout == "incomplete_v2":
-        _recover_files(session)  # not recover_incomplete_v2: that would remove our own lock
+    if layout == "pose_incomplete":
+        _recover_files(session)  # not recover_incomplete_pose: that would remove our own lock
         layout = session_layout(session)
-    if layout == "v2" and not regenerate:
-        raise PoseDataExistsError(f"complete pose data exists: {session}. Use regenerate=True (--regenerate-v2).")
+    if layout == "pose" and not regenerate:
+        raise PoseDataExistsError(f"complete pose data exists: {session}. Use regenerate=True (--regenerate).")
 
     prevalidate(payload)
 
     # Refuse before staging if a planned destination is already occupied by something that is
-    # not part of an existing version 2 dataset. Such files are never overwritten.
+    # not part of an existing pose data dataset. Such files are never overwritten.
     owned = set()
-    if layout == "v2":
+    if layout == "pose":
         old_manifest = _load_manifest(session / MANIFEST_FILE)
         if old_manifest is None:
             raise PoseDataError("existing pose data manifest is unreadable; refusing to replace the dataset")
@@ -504,7 +504,7 @@ def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = Fals
         shutil.rmtree(staging, ignore_errors=True)  # an ordinary error: leave nothing behind
         raise
 
-    if layout == "v2":
+    if layout == "pose":
         _move_previous(session, _load_manifest(session / MANIFEST_FILE))
     _publish(session, staging, manifest, fail_at)
     shutil.rmtree(staging, ignore_errors=True)
@@ -537,11 +537,11 @@ def _stage_and_verify(staging: Path, payload: PoseDataPayload, fail_at: str | No
     return manifest
 
 
-def recover_incomplete_v2(session_dir) -> list[str]:
-    """Undo an interrupted version 2 operation. Touches only version 2 files and staging folders.
+def recover_incomplete_pose(session_dir) -> list[str]:
+    """Undo an interrupted pose data operation. Touches only pose data files and staging folders.
 
     Removes staged leftovers, removes published files listed in the manifest of an unfinished
-    publication, and restores a previous version 2 dataset that was moved aside.
+    publication, and restores a previous pose data dataset that was moved aside.
     Returns the list of actions taken.
     """
     session = Path(session_dir)
@@ -576,16 +576,16 @@ def _recover_files(session: Path) -> list[str]:
                 actions.append(f"removed interrupted file {entry['path']}")
         manifest_path.unlink()
         actions.append(f"removed {MANIFEST_FILE}")
-        _remove_empty_v2_dirs(session)
+        _remove_empty_pose_dirs(session)
 
     for previous in _previous_dirs(session):
         _restore_previous(session, previous)
-        actions.append(f"restored previous version 2 dataset from {previous.name}")
+        actions.append(f"restored previous pose data dataset from {previous.name}")
     return actions
 
 
-def rollback_v2(session_dir) -> list[str]:
-    """Remove a complete version 2 dataset and restore the previous one if it was kept.
+def rollback_pose_session(session_dir) -> list[str]:
+    """Remove a complete pose data dataset and restore the previous one if it was kept.
 
     Only files named in the manifest are removed, and only when their checksum still matches.
     A file that has changed is reported and left in place.
@@ -606,24 +606,24 @@ def rollback_v2(session_dir) -> list[str]:
         if (session / name).is_file():
             (session / name).unlink()
             actions.append(f"removed {name}")
-    _remove_empty_v2_dirs(session)
+    _remove_empty_pose_dirs(session)
     for previous in _previous_dirs(session):
         _restore_previous(session, previous)
-        actions.append(f"restored previous version 2 dataset from {previous.name}")
+        actions.append(f"restored previous pose data dataset from {previous.name}")
     return actions
 
 
 def _check_before_removal(session: Path, manifest: dict) -> None:
     """Refuse to remove anything unless the manifest is sound and every present file still matches it.
 
-    Raises PoseDataError and removes nothing when: the manifest fails validation, lists a version 1 name,
+    Raises PoseDataError and removes nothing when: the manifest fails validation, lists a face data name,
     or any listed file exists with a different size or checksum (it was edited after publication).
     """
     issues = validate_manifest(manifest)
     for entry in manifest.get("files", []):
         rel = entry.get("path", "")
-        if is_v1_path(rel):
-            issues.append(f"manifest lists a version 1 file: {rel}")
+        if is_face_path(rel):
+            issues.append(f"manifest lists a face data file: {rel}")
     changed = []
     for entry in manifest.get("files", []):
         try:
@@ -638,8 +638,8 @@ def _check_before_removal(session: Path, manifest: dict) -> None:
         raise PoseDataError("refusing to remove anything: " + "; ".join(issues))
 
 
-def _remove_empty_v2_dirs(session: Path) -> None:
-    for directory in V2_DIRECTORIES:
+def _remove_empty_pose_dirs(session: Path) -> None:
+    for directory in POSE_DIRECTORIES:
         folder = session / directory
         if folder.is_dir():
             for sub in sorted(folder.rglob("*"), reverse=True):

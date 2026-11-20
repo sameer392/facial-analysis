@@ -1,4 +1,4 @@
-"""Body Motion page: inspect existing V2 Pose Landmarker output. Read only; nothing is generated here."""
+"""Body Motion page: inspect existing Pose Landmarker output. Read only; nothing is generated here."""
 
 import sys
 from pathlib import Path
@@ -21,15 +21,15 @@ from pose_schema import session_layout  # noqa: E402
 DEFAULT_THRESHOLD = 0.5  # the same empirical default as the pose visibility gate
 
 st.set_page_config(page_title="Body Motion", layout="wide")
-st.title("Body Motion (V2 Pose)")
-st.caption("Inspects existing Pose Landmarker V2 output. Tracking figures only; not a measure of motion accuracy.")
+st.title("Body motion (pose data)")
+st.caption("Inspects existing Pose Landmarker pose data. Tracking figures only; not a measure of motion accuracy.")
 
 
-@st.cache_data(show_spinner="Checking V2 session...")
+@st.cache_data(show_spinner="Checking pose data session...")
 def checked_session(session_path: str, metadata_mtime_ns: int, person: str, session_id: str):
-    """Validated V2 session, or the reason it was rejected. Keyed on metadata mtime, so regeneration refreshes it."""
+    """Validated pose data session, or the reason it was rejected. Keyed on metadata mtime, so regeneration refreshes it."""
     try:
-        return vv.validate_v2_session(Path(session_path), person, session_id), None
+        return vv.validate_pose_session(Path(session_path), person, session_id), None
     except vv.PoseDataViewerError as exc:
         return None, str(exc)
 
@@ -57,7 +57,7 @@ def read_video_frame(video_path: str, video_mtime_ns: int, index: int):
 candidates = []
 for person_dir in sorted(p for p in pp.DATASETS_ROOT.glob("*") if p.is_dir() and pp.is_valid_person(p.name)):
     for session_dir in sorted(p for p in person_dir.glob("*") if p.is_dir() and pp.is_valid_session(p.name)):
-        if session_layout(session_dir) in ("v1", "none"):
+        if session_layout(session_dir) in ("face", "none"):
             continue
         candidates.append((person_dir.name, session_dir.name, session_dir))
 
@@ -72,13 +72,13 @@ for person, session_id, session_dir in candidates:
         valid.append(info)
 
 if rejected:
-    with st.expander(f"{len(rejected)} V2 folder(s) not shown (failed checks)"):
+    with st.expander(f"{len(rejected)} pose data folder(s) not shown (failed checks)"):
         for path, reason in rejected:
             st.write(f"`{path}`: {reason}")
 
 if not valid:
     st.info(
-        "No valid V2 Pose sessions were found. Create one with the command line: "
+        "No valid pose data sessions were found. Create one with the command line: "
         "`python src/extraction/build_pose_session.py <person> <session>`. "
         "Sessions appear here only after their metadata, manifest and arrays pass the checks."
     )
@@ -88,7 +88,7 @@ if not valid:
 with st.sidebar:
     st.header("Session")
     labels = {f"{v.person} / {v.session_id}": v for v in valid}
-    chosen = labels[st.selectbox("V2 session", list(labels))]
+    chosen = labels[st.selectbox("pose data session", list(labels))]
     threshold = st.slider("Visibility threshold", 0.0, 1.0, DEFAULT_THRESHOLD, 0.05,
                           help="Joints below this visibility are drawn grey and counted as low visibility. "
                                "Stored values are not changed.")
@@ -127,7 +127,7 @@ if frame_bgr is None:
 else:
     h, w = frame_bgr.shape[:2]
     if (w, h) != (chosen.width, chosen.height):
-        st.warning(f"The video is {w}x{h} but the V2 metadata records {chosen.width}x{chosen.height}. "
+        st.warning(f"The video is {w}x{h} but the pose data metadata records {chosen.width}x{chosen.height}. "
                    "The overlay uses the video size, so check the alignment.")
     overlay = vv.draw_pose_overlay(frame_bgr, pose[frame_index], threshold,
                                    show_points=show_points, show_skeleton=show_skeleton)

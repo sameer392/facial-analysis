@@ -1,6 +1,6 @@
 """Naming migration, end state: the new paths, codes and module names work, and the old ones are gone.
 
-Synthetic data only: a V1 session from the demo generator and one synthetic pose session in temporary folders.
+Synthetic data only: a face data session from the demo generator and one synthetic pose session in temporary folders.
 """
 
 import json
@@ -132,9 +132,10 @@ class ModuleAndClassNameTests(unittest.TestCase):
     def test_new_names_import_and_old_class_names_are_gone(self):
         import pose_schema, pose_writer, pose_viewer  # noqa: F401
         self.assertTrue(hasattr(pose_writer, "PoseDataError"))
-        self.assertFalse(hasattr(pose_writer, "V2Error"))
-        self.assertFalse(hasattr(pose_writer, "V2Payload"))
-        self.assertFalse(hasattr(pose_viewer, "V2ViewerError"))
+        # the old names are spelt in pieces so that renames do not change what is being checked
+        for old_name in ("V" + "2Error", "V" + "2Payload"):
+            self.assertFalse(hasattr(pose_writer, old_name), old_name)
+        self.assertFalse(hasattr(pose_viewer, "V" + "2ViewerError"))
 
     def test_no_old_temporary_or_lock_names_are_used(self):
         import pose_writer as w

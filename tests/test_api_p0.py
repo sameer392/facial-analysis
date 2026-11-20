@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import project_paths as pp  # noqa: E402
 import pose_schema as s2  # noqa: E402
 import pose_writer as w  # noqa: E402
-import test_pose_writer as tsw  # noqa: E402  (synthetic V2 payload)
+import test_pose_writer as tsw  # noqa: E402  (synthetic pose data payload)
 from api import catalog  # noqa: E402
 from api.catalog import ApiError  # noqa: E402
 
@@ -59,15 +59,15 @@ class P0TestCase(unittest.TestCase):
         self._orig = (pp.RECORDINGS_RAW, pp.DATASETS_ROOT)
         pp.RECORDINGS_RAW = self.tmp / "recordings" / "raw"
         pp.DATASETS_ROOT = self.tmp / "datasets"
-        # person A: one V1 session (with video), one V2 session (with video), one video only
+        # person A: one face data session (with video), one pose data session (with video), one video only
         for name in ("session-001", "session-002", "session-003"):
             pp.session_video("person_a", name).parent.mkdir(parents=True, exist_ok=True)
             pp.session_video("person_a", name).write_bytes(b"synthetic video placeholder")
-        v1 = pp.session_dataset_dir("person_a", "session-001")
-        v1.mkdir(parents=True)
-        (v1 / "facial_data.json").write_text("[]", encoding="utf-8")
-        v2 = pp.session_dataset_dir("person_a", "session-002")
-        w.write_v2_session(v2, tsw.make_payload())
+        face_dir = pp.session_dataset_dir("person_a", "session-001")
+        face_dir.mkdir(parents=True)
+        (face_dir / "facial_data.json").write_text("[]", encoding="utf-8")
+        pose_dir = pp.session_dataset_dir("person_a", "session-002")
+        w.write_pose_session(pose_dir, tsw.make_payload())
         pp.person_recordings_dir("person_b").mkdir(parents=True)  # a person with no sessions
 
     def tearDown(self):
@@ -84,8 +84,8 @@ class ParityTests(P0TestCase):
         rows = catalog.list_sessions("person_a")
         self.assertEqual([r["session_id"] for r in rows], pp.list_sessions("person_a"))
         layouts = {r["session_id"]: r["layout"] for r in rows}
-        self.assertEqual(layouts["session-001"], "v1")
-        self.assertEqual(layouts["session-002"], "v2")
+        self.assertEqual(layouts["session-001"], "face")
+        self.assertEqual(layouts["session-002"], "pose")
         self.assertEqual(layouts["session-003"], "none")
 
     def test_person_without_sessions_gives_an_empty_list(self):

@@ -1,4 +1,4 @@
-"""Phase P4 tests: the job system. A fake worker stands in for the V2 build, so no model is needed.
+"""Phase P4 tests: the job system. A fake worker stands in for the pose data build, so no model is needed.
 
 Covers: refusals before queueing, token checks, success, failure, cancel, one active job per session,
 the writer lock, restart handling (interrupted jobs, leftovers reported and not removed), and that the create
@@ -212,10 +212,10 @@ class LifecycleTests(P4TestCase):
 
     def test_completed_pose_session_needs_regenerate(self):
         original = jobs.session_layout
-        jobs.session_layout = lambda _folder: "v2"
+        jobs.session_layout = lambda _folder: "pose"
         try:
             status, body = self.post_job("session-001")
-            self.assertEqual((status, body["code"]), (409, "v2_exists"))
+            self.assertEqual((status, body["code"]), (409, "pose_exists"))
             status, job = self.post_job("session-001", regenerate=True)
             self.assertEqual(status, 202)
             self.wait_for(job["id"], ("succeeded", "failed"))
@@ -292,7 +292,7 @@ class FaceKindTests(P4TestCase):
     def test_regenerate_adds_the_matching_flag(self):
         base = {"person": "demo_person", "session": "session-001", "regenerate": True}
         self.assertIn("--force", jobs.default_command({**base, "kind": "face_analyse"}))
-        self.assertIn("--regenerate-v2", jobs.default_command({**base, "kind": "pose_build"}))
+        self.assertIn("--regenerate", jobs.default_command({**base, "kind": "pose_build"}))
         self.assertNotIn("--force", jobs.default_command({**base, "kind": "face_extract"}))
 
     def test_worker_output_is_unbuffered(self):
@@ -313,7 +313,7 @@ class ProgressParsingTests(unittest.TestCase):
         self.assertEqual(jobs.parse_progress("pose_build", "Publishing the pose data...", {}), ("publish", 5 / 6))
         self.assertEqual(jobs.parse_progress("pose_build", "Pose data published: /x", {}), ("verify", 1.0))
         # the older wording is no longer read as a progress marker
-        self.assertIsNone(jobs.parse_progress("pose_build", "V2 session published: /x", {}))
+        self.assertIsNone(jobs.parse_progress("pose_build", "pose data published: /x", {}))
 
     def test_analysis_and_build_markers(self):
         self.assertEqual(jobs.parse_progress("face_analyse", "CSV created: x", {}), ("assemble", 0.25))
