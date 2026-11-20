@@ -27,6 +27,7 @@ from pose_schema import (  # noqa: E402
     ARRAY_SPECS,
     HAND_DETECTED_STATUSES,
     METADATA_FILE,
+    OPTIONAL_ARRAY_SPECS,
     TIMELINE_FILE,
     session_layout,
 )
@@ -59,6 +60,10 @@ def read_pose_session(session_dir) -> dict:
         if not path.is_file():
             raise HandBuildError(f"pose data is missing {spec.relative_path}")
         arrays[spec.relative_path] = np.load(path, allow_pickle=False)
+    for spec in OPTIONAL_ARRAY_SPECS:  # present once the hand stream has been written
+        path = session / spec.relative_path
+        if path.is_file():
+            arrays[spec.relative_path] = np.load(path, allow_pickle=False)
     blend_path = session / "facial" / "blendshapes.csv"
     blend = pd.read_csv(blend_path)
     if list(blend.columns) != list(BLENDSHAPE_COLUMNS):

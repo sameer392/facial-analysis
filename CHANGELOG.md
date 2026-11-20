@@ -11,6 +11,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Hand Motion Analysis, phase H1 (branch `hand-motion`): hand detection and 21-point landmark extraction with MediaPipe Hand Landmarker, normalised and world coordinates kept separately, and a per-frame hand status file. Written into the hands stream of the pose data session by `src/extraction/build_hand_session.py`. Tracking, gestures, API and frontend are not yet implemented.
+- Hand Motion Analysis, phase H2: temporal hand tracking (track IDs with interruption, reacquisition and termination events, uncertainty flags for label conflicts, close hands and ambiguous candidates) and image-space motion metrics (centroid, wrist and fingertip positions, displacement, velocity, acceleration, direction, joint angles, openness, orientation). Written to `hands/tracks.csv` and `hands/motion_metrics.csv` by `src/extraction/analyse_hand_session.py`. Units are image pixels, not physical units.
 - Compare people page (`/compare`): compare sessions from several people. `GET /api/comparison?items=person/session,...`.
 - Interruptions chart and blink timeline on the Face analysis page.
 - Blendshape values for the selected frame, movement by region, blendshape CSV download, landmark coordinate tables, and the 3D coordinates table.

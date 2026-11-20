@@ -79,6 +79,39 @@ HAND_STATUS_COLUMNS = (
     "unassigned_hands",
 )
 
+# Hand tracking (H2). Tracks are an event log: one row per link, and one row per interruption or termination.
+HAND_TRACKS_FILE = "hands/tracks.csv"
+HAND_TRACK_COLUMNS = (
+    "track_id", "event", "frame", "timestamp_ms", "label", "status", "association",
+    "uncertain_reason", "cost", "gap_frames", "centroid_x_px", "centroid_y_px", "reason",
+)
+HAND_TRACK_EVENTS = ("created", "matched", "reacquired", "interrupted", "terminated")
+
+# Motion metrics (H2): one row per linked observation. Units and formulas are in analysis/hand_metrics.py.
+HAND_MOTION_FILE = "hands/motion_metrics.csv"
+HAND_FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
+HAND_ANGLE_COLUMNS = tuple(name for pair in (
+    ("thumb_mcp_angle_deg", "thumb_ip_angle_deg"),
+    ("index_pip_angle_deg", "index_dip_angle_deg"),
+    ("middle_pip_angle_deg", "middle_dip_angle_deg"),
+    ("ring_pip_angle_deg", "ring_dip_angle_deg"),
+    ("pinky_pip_angle_deg", "pinky_dip_angle_deg"),
+) for name in pair)
+HAND_MOTION_COLUMNS = (
+    "track_id", "frame", "timestamp_ms", "label", "status", "partial_view",
+    "centroid_x_px", "centroid_y_px", "wrist_x_px", "wrist_y_px",
+    "displacement_px", "wrist_displacement_px", "velocity_px_per_s", "acceleration_px_per_s2",
+    "direction_deg", "orientation_deg", "orientation_change_deg", "openness", "motion_reason",
+) + tuple(f"{f}_tip_{a}_px" for f in HAND_FINGER_NAMES for a in ("x", "y")) + HAND_ANGLE_COLUMNS
+
+# Header of every hand table the writer accepts, and the tables whose row count is not the frame count.
+HAND_TABLE_HEADERS = {
+    HAND_STATUS_FILE: HAND_STATUS_COLUMNS,
+    HAND_TRACKS_FILE: HAND_TRACK_COLUMNS,
+    HAND_MOTION_FILE: HAND_MOTION_COLUMNS,
+}
+HAND_VARIABLE_LENGTH_TABLES = (HAND_TRACKS_FILE, HAND_MOTION_FILE)
+
 HANDEDNESS_COLUMNS = (
     "frame", "timestamp_ms",
     "left_detected", "left_model_label", "left_score",
