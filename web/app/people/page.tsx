@@ -6,13 +6,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useApiToken } from "../lib/token";
 import { Card, Empty, ErrorState, Loading } from "../components/ui";
-import { ConfirmDialog, RenameDialog, TokenField, errorText } from "../components/manage-ui";
+import { ConfirmDialog, NeedsToken, RenameDialog, errorText } from "../components/manage-ui";
 
 export default function PeoplePage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [newName, setNewName] = useState("");
-  const [token, saveToken, tokenLoaded] = useApiToken();
+  const [token, , tokenLoaded] = useApiToken();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -67,7 +67,6 @@ export default function PeoplePage() {
               className="rounded border border-[var(--border)] bg-transparent px-2 py-1 font-mono"
             />
           </label>
-          <TokenField token={token} onChange={saveToken} />
           <div className="flex items-center gap-3 md:col-span-2">
             <button
               type="submit"
@@ -78,6 +77,7 @@ export default function PeoplePage() {
             </button>
           </div>
           {add.isError ? <div className="md:col-span-2"><ErrorState {...errorText(add.error)} /></div> : null}
+          <div className="md:col-span-2"><NeedsToken token={token} loaded={tokenLoaded} /></div>
         </form>
       </Card>
 

@@ -2,28 +2,37 @@
 
 import { useEffect, useState } from "react";
 
+/** The API token is entered once, on the Settings page, and kept in this browser. */
 export const TOKEN_KEY = "facial.apiToken";
 
-/** The token is kept for this browser tab only. It is never put in the URL. */
+export function readToken(): string {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY) ?? "";
+  } catch {
+    return ""; // storage blocked: the token is treated as not set
+  }
+}
+
+export function writeToken(value: string): void {
+  try {
+    if (value === "") window.localStorage.removeItem(TOKEN_KEY);
+    else window.localStorage.setItem(TOKEN_KEY, value);
+  } catch {
+    // storage blocked: nothing is saved
+  }
+}
+
+/** The stored token, and whether it has been read yet (it is read after the first render). */
 export function useApiToken(): [string, (value: string) => void, boolean] {
   const [token, setToken] = useState("");
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    try {
-      setToken(window.sessionStorage.getItem(TOKEN_KEY) ?? "");
-    } catch {
-      // storage unavailable (private window or blocked): the token must be typed each time
-    }
+    setToken(readToken());
     setLoaded(true);
   }, []);
   const save = (value: string) => {
-    setToken(value);
-    try {
-      window.sessionStorage.setItem(TOKEN_KEY, value);
-    } catch {
-      // ignore: the token stays in memory for this page only
-    }
+    writeToken(value.trim());
+    setToken(value.trim());
   };
   return [token, save, loaded];
 }
-

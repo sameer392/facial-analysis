@@ -115,7 +115,7 @@ def settings() -> dict:
         "platform": platform.system(),
         "api_token_configured": bool(jobs.service().token),
         "token_header": "X-Facial-Token",
-        "writes": "only through job routes; each job runs an existing script",
+        "writes": "only the token-protected routes: jobs (each runs an existing script), people, recordings, datasets and job history",
         "bind_address": "127.0.0.1",
     }
 

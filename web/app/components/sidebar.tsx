@@ -40,7 +40,7 @@ export function Sidebar() {
           </Link>
         );
       })}
-      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Add and delete actions sit on each row and need the API token.</p>
+      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Add, rename and delete actions need the API token, set once on Settings.</p>
     </nav>
   );
 }

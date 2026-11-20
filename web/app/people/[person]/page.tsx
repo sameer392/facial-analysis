@@ -6,14 +6,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useApiToken } from "../../lib/token";
 import { Badge, Card, Empty, ErrorState, Loading } from "../../components/ui";
-import { ConfirmDialog, RenameDialog, TokenField, errorText } from "../../components/manage-ui";
+import { ConfirmDialog, NeedsToken, RenameDialog, errorText } from "../../components/manage-ui";
 
 type Target = { kind: "data" | "video"; session: string };
 
 export default function PersonPage({ params }: { params: Promise<{ person: string }> }) {
   const { person } = use(params);
   const queryClient = useQueryClient();
-  const [token, saveToken, tokenLoaded] = useApiToken();
+  const [token, , tokenLoaded] = useApiToken();
   const sessions = useQuery({ queryKey: ["sessions", person], queryFn: () => api.sessions(person) });
   const [file, setFile] = useState<File | null>(null);
   const [session, setSession] = useState("");
@@ -95,7 +95,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
             <input type="file" accept="video/mp4" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
           </label>
           <div className="md:col-span-2">
-            <TokenField token={token} onChange={saveToken} />
+            <NeedsToken token={token} loaded={tokenLoaded} />
           </div>
           {progress !== null ? (
             <div className="md:col-span-2">

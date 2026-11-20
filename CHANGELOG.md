@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- API token: kept in `config/api_token.txt` (same across restarts) and entered once on the Settings page. Other pages no longer show a token box.
 - Live job progress: `GET /api/jobs/{id}/events` (Server-Sent Events, read only). The Jobs page updates each active job as its progress changes.
 - Upload shows a progress bar (the upload is sent with XMLHttpRequest so progress can be reported).
 - Rename a person or a recording from its row. Refused while processed data exists; delete the data, rename, then rebuild.

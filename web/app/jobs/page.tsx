@@ -48,7 +48,7 @@ function errorText(error: unknown): { message: string; code?: string } {
 
 export default function JobsPage() {
   const queryClient = useQueryClient();
-  const [token, saveToken, tokenLoaded] = useApiToken();
+  const [token, , tokenLoaded] = useApiToken();
   const [kind, setKind] = useState<JobKind>("face_build");
   const [person, setPerson] = useState("");
   const [session, setSession] = useState("");
@@ -126,7 +126,7 @@ export default function JobsPage() {
   // The first missing requirement, shown next to the button so a disabled button explains itself.
   const blocker =
     !tokenLoaded ? null
-    : token === "" ? "Enter the API token above to start a build."
+    : token === "" ? "Set the API token on the Settings page first."
     : person === "" ? "Choose a person."
     : session === "" ? "Choose a session."
     : isRegeneration && !regenerate ? "This session already has data for this job. Tick “Replace” to start it again."
@@ -139,28 +139,10 @@ export default function JobsPage() {
         <h1 className="text-2xl font-semibold">Jobs</h1>
         <p className="text-sm text-[var(--muted)]">
           Start a pose build for a recording. The build runs the existing command-line code in its own
-          process. Progress is shown per stage, not per frame. Starting and cancelling need the API token.
+          process. Progress is shown per stage, not per frame.
         </p>
       </header>
 
-      <Card title="API token">
-        <div className="flex flex-col gap-2 text-sm md:flex-row md:items-end">
-          <label className="flex flex-1 flex-col gap-1">
-            Token from the API console (kept for this tab only)
-            <input
-              type="password"
-              autoComplete="off"
-              value={token}
-              onChange={(e) => saveToken(e.target.value)}
-              className="rounded border border-[var(--border)] bg-transparent px-2 py-1 font-mono"
-              aria-describedby="token-help"
-            />
-          </label>
-          <p id="token-help" className="text-xs text-[var(--muted)]">
-            {token ? "Token set for this tab." : "No token set. Starting and cancelling are disabled."}
-          </p>
-        </div>
-      </Card>
 
       <Card title="Start a job">
         <form onSubmit={onStart} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

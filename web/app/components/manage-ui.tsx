@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ApiFailure } from "../lib/api";
 import { useApiToken } from "../lib/token";
@@ -11,24 +12,18 @@ export function errorText(error: unknown): { message: string; code?: string } {
   return { message: "Unknown error" };
 }
 
-/** The API token, kept for this browser tab. Shared by every page that changes data. */
-export function TokenField({ token, onChange }: { token: string; onChange: (value: string) => void }) {
+/** Shown wherever an action needs the token and none is saved yet. The token is set only on the Settings page. */
+export function NeedsToken({ token, loaded }: { token: string; loaded: boolean }) {
+  if (!loaded || token !== "") return null;
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      API token (kept for this tab only)
-      <input
-        type="password"
-        autoComplete="off"
-        value={token}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-[var(--border)] bg-transparent px-2 py-1 font-mono"
-      />
-    </label>
+    <p className="text-sm text-[var(--muted)]">
+      Set the API token on the <Link href="/settings" className="underline">Settings</Link> page first.
+    </p>
   );
 }
 
 /**
- * Asks for the exact name before a deletion, and for the token if none is set. The parent unmounts this
+ * Asks for the exact name before a deletion. The token comes from the Settings page. The parent unmounts this
  * dialog when it closes, so the typed text is cleared each time.
  */
 export function ConfirmDialog({
@@ -43,7 +38,7 @@ export function ConfirmDialog({
   onClose: () => void;
   onConfirm: (token: string, typed: string) => void;
 }) {
-  const [token, saveToken, loaded] = useApiToken();
+  const [token, , loaded] = useApiToken();
   const [typed, setTyped] = useState("");
   const ready = loaded && token !== "" && typed === expected && !pending;
   return (
@@ -54,7 +49,7 @@ export function ConfirmDialog({
         <h2 id="confirm-title" className="text-lg font-semibold">{title}</h2>
         <div className="mt-2 text-sm text-[var(--muted)]">{children}</div>
         <div className="mt-4 flex flex-col gap-3">
-          <TokenField token={token} onChange={saveToken} />
+          <NeedsToken token={token} loaded={loaded} />
           <label className="flex flex-col gap-1 text-sm">
             Type <code className="font-mono">{expected}</code> to confirm
             <input
@@ -84,7 +79,7 @@ export function ConfirmDialog({
 
 const VALID_NAME = /^[a-z0-9_-]+$/;
 
-/** Asks for a new name (and the token if none is set). The name rules are checked here and again by the server. */
+/** Asks for a new name. The name rules are checked here and again by the server. */
 export function RenameDialog({
   title, current, pending = false, error, onClose, onConfirm,
 }: {
@@ -95,7 +90,7 @@ export function RenameDialog({
   onClose: () => void;
   onConfirm: (token: string, newName: string) => void;
 }) {
-  const [token, saveToken, loaded] = useApiToken();
+  const [token, , loaded] = useApiToken();
   const [name, setName] = useState("");
   const valid = VALID_NAME.test(name) && name !== current;
   const ready = loaded && token !== "" && valid && !pending;
@@ -110,7 +105,7 @@ export function RenameDialog({
           A recording with processed data must have its data deleted first.
         </p>
         <div className="mt-4 flex flex-col gap-3">
-          <TokenField token={token} onChange={saveToken} />
+          <NeedsToken token={token} loaded={loaded} />
           <label className="flex flex-col gap-1 text-sm">
             New name
             <input value={name} onChange={(e) => setName(e.target.value)} autoFocus

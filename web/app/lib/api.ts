@@ -329,6 +329,20 @@ export const api = {
     send<DeleteResult>("POST", `/persons/${enc(person)}/sessions/${enc(session)}/video/delete`, token, { confirm }),
   uploadVideo: (token: string, person: string, session: string, file: Blob, onProgress?: (fraction: number) => void) =>
     uploadWithProgress(`/persons/${enc(person)}/sessions/${enc(session)}/video`, token, file, onProgress),
+  /** Checks a token without changing anything: a wrong token is refused (401); a right one gets past the check (400). */
+  checkToken: async (token: string): Promise<"ok" | "wrong" | "unreachable"> => {
+    try {
+      const response = await fetch("/api/jobs/history/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Facial-Token": token },
+        body: JSON.stringify({ confirm: "" }),
+      });
+      if (response.status === 401) return "wrong";
+      return response.status === 400 ? "ok" : "unreachable";
+    } catch {
+      return "unreachable";
+    }
+  },
   renamePerson: (token: string, person: string, to: string) =>
     send<{ person: string; renamed_to: string }>("POST", `/persons/${enc(person)}/rename`, token, { to }),
   renameSession: (token: string, person: string, session: string, to: string) =>
