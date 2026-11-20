@@ -151,7 +151,7 @@ function get<T>(path: string): Promise<T> {
   return request<T>("GET", path);
 }
 
-export type JobKind = "face_build" | "pose_build" | "face_extract" | "face_analyse";
+export type JobKind = "face_build" | "pose_build" | "hand_build" | "face_extract" | "face_analyse";
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
 
@@ -170,6 +170,152 @@ export type Job = {
   message: string | null;
   pid: number | null;
   cancel_requested: boolean;
+};
+
+
+// ---- hand motion (H5 read-only routes). Field names follow api/hand_data.py and the H1 to H4 tables.
+
+export type HandSummary = {
+  session_id: string;
+  streams: Record<string, string | undefined>;
+  tracking: boolean;
+  gestures: boolean;
+  source: { fps: number | null; frame_count: number | null; width: number | null; height: number | null };
+  models: { hand: { file: string | null; version: string | null; licence_status: string | null } };
+  detected_frames: number | null;
+  status_counts: { left: Record<string, number>; right: Record<string, number> };
+};
+
+export type HandPoint = [number | null, number | null, number | null];
+
+export type HandLandmarkPage = {
+  side: "left" | "right";
+  total_frames: number;
+  start: number;
+  limit: number;
+  frames: { frame: number; status: string | null; points: HandPoint[] | null }[];
+};
+
+export type HandTablePage<T> = { total: number; offset: number; limit: number; rows: T[] };
+
+export type HandTrackRow = {
+  track_id: number;
+  event: string;
+  frame: number;
+  timestamp_ms: number | null;
+  label: string;
+  status: string | null;
+  association: string | null;
+  uncertain_reason: string | null;
+  cost: number | null;
+  gap_frames: number | null;
+  centroid_x_px: number | null;
+  centroid_y_px: number | null;
+  reason: string | null;
+};
+
+/** One motion observation. Pixel fields are image pixels (normalised x * width, y * height), not physical units. */
+export type HandMotionRow = {
+  track_id: number;
+  frame: number;
+  timestamp_ms: number | null;
+  label: string;
+  status: string | null;
+  partial_view: number | null;
+  centroid_x_px: number | null;
+  centroid_y_px: number | null;
+  wrist_x_px: number | null;
+  wrist_y_px: number | null;
+  displacement_px: number | null;
+  wrist_displacement_px: number | null;
+  velocity_px_per_s: number | null;
+  acceleration_px_per_s2: number | null;
+  direction_deg: number | null;
+  orientation_deg: number | null;
+  orientation_change_deg: number | null;
+  openness: number | null;
+  motion_reason: string | null;
+  [column: string]: string | number | boolean | null;
+};
+
+export type HandGestureObservationRow = {
+  track_id: number;
+  frame: number;
+  timestamp_ms: number | null;
+  label: string;
+  frame_class: string;
+  reason: string | null;
+  quality: string;
+  thumb_state: string | null;
+  index_state: string | null;
+  middle_state: string | null;
+  ring_state: string | null;
+  pinky_state: string | null;
+  margin: number | null;
+  event_id: string | null;
+};
+
+export type HandGestureEventRow = {
+  event_id: string;
+  track_id: number;
+  label: string;
+  gesture: string;
+  start_frame: number;
+  end_frame: number;
+  start_timestamp_ms: number;
+  end_timestamp_ms: number;
+  duration_ms: number;
+  supporting_observations: number;
+  bridged_observations: number;
+  support_quality: number;
+  margin_median: number | null;
+  end_reason: string;
+};
+
+export type HandTrackingQuality = {
+  frames: number;
+  tracks_created: number;
+  tracks_terminated: number;
+  interruptions: number;
+  reacquisitions: number;
+  observations: number;
+  uncertain_observations: Record<string, number>;
+  missing_frame_reasons: Record<string, number>;
+  motion_reasons: Record<string, number>;
+  velocity_px_per_s: { count: number; median: number | null; peak: number | null };
+  timestamps: { median_interval_ms: number | null; irregular_intervals: number; frame_index_gaps: number };
+  smoothing: string;
+  coordinates: string;
+};
+
+export type HandGestureQuality = {
+  observations: number;
+  frame_classes: Record<string, number>;
+  unknown_reasons: Record<string, number>;
+  observation_quality: Record<string, number>;
+  uncertain_tracking_observations: number;
+  events: number;
+  events_per_gesture: Record<string, number>;
+  duration_ms: { min: number | null; median: number | null; max: number | null };
+  end_reasons: Record<string, number>;
+  bridged_observations: number;
+  scope: string;
+};
+
+export type HandValidation = {
+  session: string;
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  metrics: Record<string, unknown>;
+  provenance: {
+    extraction?: Record<string, unknown>;
+    hand_model?: { file?: string; sha256?: string; version?: string; licence_status?: string; licence_note?: string };
+    processing_timestamp_utc?: string | null;
+    manifest_sha256?: string | null;
+    calibration?: string;
+    source?: Record<string, unknown>;
+  };
 };
 
 export const ACTIVE_JOB_STATES: JobState[] = ["queued", "running"];
@@ -392,6 +538,26 @@ export const api = {
   renameSession: (token: string, person: string, session: string, to: string) =>
     send<{ person: string; session: string; renamed_to: string }>(
       "POST", `/persons/${enc(person)}/sessions/${enc(session)}/rename`, token, { to }),
+  handSummary: (person: string, session: string) =>
+    get<HandSummary>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/summary`),
+  handLandmarks: (person: string, session: string, side: "left" | "right", start: number, limit: number) =>
+    get<HandLandmarkPage>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/landmarks?side=${side}&start=${start}&limit=${limit}`),
+  handTracks: (person: string, session: string, offset: number, limit: number) =>
+    get<HandTablePage<HandTrackRow>>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/tracks?offset=${offset}&limit=${limit}`),
+  handMotion: (person: string, session: string, offset: number, limit: number) =>
+    get<HandTablePage<HandMotionRow>>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/motion?offset=${offset}&limit=${limit}`),
+  handGestureObservations: (person: string, session: string, offset: number, limit: number) =>
+    get<HandTablePage<HandGestureObservationRow>>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/gestures/observations?offset=${offset}&limit=${limit}`),
+  handGestureEvents: (person: string, session: string, offset: number, limit: number) =>
+    get<HandTablePage<HandGestureEventRow>>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/gestures/events?offset=${offset}&limit=${limit}`),
+  handQualityTracking: (person: string, session: string) =>
+    get<HandTrackingQuality>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/quality/tracking`),
+  handQualityGestures: (person: string, session: string) =>
+    get<HandGestureQuality>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/quality/gestures`),
+  handValidation: (person: string, session: string) =>
+    get<HandValidation>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/validation`),
+  handOverlayUrl: (person: string, session: string, index: number) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/hands/frames/${index}/overlay.jpg`,
   clearJobHistory: (token: string, confirm: string) =>
     send<{ removed: number }>("POST", "/jobs/history/clear", token, { confirm }),
 };
