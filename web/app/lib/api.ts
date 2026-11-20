@@ -303,6 +303,10 @@ export const api = {
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
   faceTopology: () => get<FaceTopology>("/face/topology"),
+  faceOriginalUrl: (person: string, session: string, index: number) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/original.jpg`,
+  faceOverlayUrl: (person: string, session: string, index: number, mode: string, opacity: number, thickness: number, pointSize: number) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/overlay.jpg?mode=${mode}&opacity=${opacity}&thickness=${thickness}&point_radius=${pointSize}`,
   headPose: (person: string, session: string) =>
     get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/face/head-pose`),
   poseInfo: (person: string, session: string) =>

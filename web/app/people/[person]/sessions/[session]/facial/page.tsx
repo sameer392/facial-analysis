@@ -14,8 +14,17 @@ const HEAD_FIELDS = ["yaw_deg", "pitch_deg", "roll_deg"];
 const TIMELINE_FIELDS = ["face_detected", "is_neutral"];
 const ALL_FIELDS = [...TIMELINE_FIELDS, ...MOTION_FIELDS, ...EXPRESSION_FIELDS, ...HEAD_FIELDS];
 
+const OVERLAY_MODES: [string, string][] = [
+  ["hybrid", "Hybrid (faint mesh + contours)"],
+  ["wireframe", "Wireframe (full mesh)"],
+  ["contours", "Contours (eyes, brows, nose, lips, oval)"],
+  ["points", "Points (original dots)"],
+  ["off", "Off"],
+];
+
 const SECTIONS: [string, string][] = [
   ["summary", "Summary"],
+  ["frame", "Video frame"],
   ["timeline", "Detection timeline"],
   ["motion", "Motion"],
   ["expressions", "Expressions and blinks"],
@@ -57,6 +66,10 @@ function landmarkOption(points: (number | null)[][] | undefined, title: string):
 export default function FacePage({ params }: { params: Promise<{ person: string; session: string }> }) {
   const { person, session } = use(params);
   const [frame, setFrame] = useState(0);
+  const [mode, setMode] = useState("hybrid");
+  const [opacity, setOpacity] = useState(0.8);
+  const [thickness, setThickness] = useState(1);
+  const [pointSize, setPointSize] = useState(2);
 
   const summary = useQuery({ queryKey: ["face-summary", person, session], queryFn: () => api.faceSummary(person, session) });
   const series = useQuery({ queryKey: ["face-series", person, session], queryFn: () => api.faceSeries(person, session, ALL_FIELDS) });
@@ -158,6 +171,46 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
         ) : null}
       </section>
 
+      <section id="frame" className="scroll-mt-6">
+        <Card title={`Video frame ${frame} and landmark overlay`}>
+          <div className="mb-3 grid gap-3 text-sm md:grid-cols-5">
+            <label className="flex flex-col gap-1 md:col-span-2">
+              Landmark overlay
+              <select value={mode} onChange={(e) => setMode(e.target.value)} className="rounded border border-[var(--border)] bg-transparent px-2 py-1">
+                {OVERLAY_MODES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              Overlay opacity: {opacity.toFixed(2)}
+              <input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
+            </label>
+            <label className="flex flex-col gap-1">
+              Line thickness: {thickness}
+              <input type="range" min={1} max={3} step={1} value={thickness} onChange={(e) => setThickness(Number(e.target.value))} />
+            </label>
+            <label className="flex flex-col gap-1">
+              Point size: {pointSize}
+              <input type="range" min={1} max={5} step={1} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
+            </label>
+          </div>
+          <label className="mb-3 flex max-w-md flex-col gap-1 text-sm">
+            Frame: {frame} of {Math.max(frames - 1, 0)}
+            <input type="range" min={0} max={Math.max(frames - 1, 0)} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label="Frame" />
+          </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <figure>
+              <figcaption className="mb-1 text-sm text-[var(--muted)]">Original frame</figcaption>
+              <img src={api.faceOriginalUrl(person, session, frame)} alt={`Original frame ${frame}`} className="w-full rounded border border-[var(--border)]" />
+            </figure>
+            <figure>
+              <figcaption className="mb-1 text-sm text-[var(--muted)]">Landmark overlay</figcaption>
+              <img src={api.faceOverlayUrl(person, session, frame, mode, opacity, thickness, pointSize)} alt={`Landmark overlay for frame ${frame}`} className="w-full rounded border border-[var(--border)]" />
+            </figure>
+          </div>
+          <p className="mt-2 text-xs text-[var(--muted)]">The same frame is used for the landmark views further down.</p>
+        </Card>
+      </section>
+
       <section id="timeline" className="scroll-mt-6">
         {timelineOption ? (
           <Card title="Face detection and neutral frames over time">
@@ -219,17 +272,6 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
 
       <section id="landmarks" className="scroll-mt-6">
         <Card title="Landmarks for one frame">
-          <label className="mb-3 flex max-w-md flex-col gap-1 text-sm">
-            Frame: {frame}
-            <input
-              type="range"
-              min={0}
-              max={Math.max(frames - 1, 0)}
-              value={frame}
-              onChange={(e) => setFrame(Number(e.target.value))}
-              aria-label="Frame"
-            />
-          </label>
           <div className="grid gap-4 md:grid-cols-2">
             {raw.isPending && !raw.data ? <Loading label="Loading raw landmarks…" /> : <Chart option={landmarkOption(raw.data?.points, "Raw (normalised image units)")} label="Raw landmarks" />}
             {compensated.isPending && !compensated.data ? <Loading label="Loading compensated landmarks…" /> : <Chart option={landmarkOption(compensated.data?.points, "Head-pose compensated (face-size units)")} label="Compensated landmarks" />}
