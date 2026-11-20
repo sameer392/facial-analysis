@@ -76,10 +76,21 @@ def js(method, path, query="", body=None, token=None):
 
 
 class JobCase(unittest.TestCase):
-    """Job tests use a fake hand worker, so they do not need MediaPipe."""
+    """Job tests use a fake hand worker, so they do not need MediaPipe.
+
+    They test the job lifecycle, not the model. The Hand Landmarker file is a large, git-ignored binary that CI does
+    not have, so by default the integrity check is replaced here. The real check is tested in ModelGateTests, against
+    temporary files, and it is never weakened in production code.
+    """
+
+    PATCH_MODEL = True
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="api_hand_jobs_"))
+        if self.PATCH_MODEL:
+            model_check = mock.patch.object(jobs, "verify_model", return_value=None)
+            model_check.start()
+            self.addCleanup(model_check.stop)
         self._orig = (pp.RECORDINGS_RAW, pp.DATASETS_ROOT)
         pp.RECORDINGS_RAW = self.tmp / "recordings" / "raw"
         pp.DATASETS_ROOT = self.tmp / "datasets"
@@ -96,6 +107,13 @@ class JobCase(unittest.TestCase):
         time.sleep(0.2)
         pp.RECORDINGS_RAW, pp.DATASETS_ROOT = self._orig
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def create_job(self, body, token=TOKEN):
+        """Create a job and return its record. A refusal fails here with the server's reason, not later as a KeyError."""
+        status, job = js("POST", "/api/jobs", body=body, token=token)
+        self.assertEqual(status, 202, f"job creation was refused: {job}")
+        self.assertIn("id", job, f"job record has no id: {job}")
+        return job
 
     def make_session(self, session="session-001", pose=True):
         video = pp.session_video("demo_person", session)
@@ -135,8 +153,7 @@ class JobTests(JobCase):
 
     def test_successful_job_reaches_succeeded_with_progress(self):
         self.make_session()
-        status, job = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
-        self.assertEqual(status, 202)
+        job = self.create_job(self.body())
         for _ in range(100):
             _, job = js("GET", f"/api/jobs/{job['id']}")
             if job["state"] in ("succeeded", "failed"):
@@ -147,7 +164,7 @@ class JobTests(JobCase):
 
     def test_failed_worker_marks_the_job_failed(self):
         self.make_session(session="session-002")
-        status, job = js("POST", "/api/jobs", body=self.body(session="session-002"), token=TOKEN)
+        job = self.create_job(self.body(session="session-002"))
         for _ in range(100):
             _, job = js("GET", f"/api/jobs/{job['id']}")
             if job["state"] in ("succeeded", "failed"):
@@ -157,13 +174,13 @@ class JobTests(JobCase):
 
     def test_second_job_for_the_same_session_is_refused(self):
         self.make_session()
-        js("POST", "/api/jobs", body=self.body(), token=TOKEN)
+        self.create_job(self.body())
         status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
         self.assertEqual((status, body["code"]), (409, "job_active"))
 
     def test_cancelling_a_running_job(self):
         self.make_session(session="session-003")
-        _, job = js("POST", "/api/jobs", body=self.body(session="session-003"), token=TOKEN)
+        job = self.create_job(self.body(session="session-003"))
         time.sleep(0.5)
         status, body = js("POST", f"/api/jobs/{job['id']}/cancel", token=TOKEN)
         self.assertEqual(status, 200)
@@ -215,7 +232,7 @@ class JobTests(JobCase):
 
     def test_token_is_never_written_to_the_job_log(self):
         self.make_session()
-        _, job = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
+        job = self.create_job(self.body())
         for _ in range(100):
             _, job = js("GET", f"/api/jobs/{job['id']}")
             if job["state"] in ("succeeded", "failed"):
@@ -341,6 +358,71 @@ class HandReadTests(tcl.GestureCase):
             self.get(path, query)
         after = {p.name: p.read_bytes() for p in (self.dataset / "hands").iterdir() if p.is_file()}
         self.assertEqual(before, after)
+
+
+class ModelGateTests(JobCase):
+    """The real integrity check, against temporary files. Nothing here loads a model."""
+
+    PATCH_MODEL = False
+
+    def body(self, session="session-001", kind="hand_build", regenerate=False):
+        return {"person": "demo_person", "session": session, "kind": kind, "regenerate": regenerate}
+
+    def fake_model(self, folder, data=b"not a real model"):
+        import hashlib
+        path = Path(folder) / "fake_model.task"
+        path.write_bytes(data)
+        return hashlib.sha256(data).hexdigest().upper()
+
+    def test_correct_hash_is_accepted(self):
+        from model_registry import ModelSpec, verify_model
+        folder = Path(tempfile.mkdtemp(prefix="model_ok_"))
+        self.addCleanup(shutil.rmtree, folder, True)
+        digest = self.fake_model(folder)
+        spec = ModelSpec("hand", "fake_model.task", digest, "test", "local test file", "test")
+        self.assertEqual(verify_model(spec, folder), folder / "fake_model.task")
+
+    def test_wrong_hash_is_refused(self):
+        from model_registry import ModelIntegrityError, ModelSpec, verify_model
+        folder = Path(tempfile.mkdtemp(prefix="model_bad_"))
+        self.addCleanup(shutil.rmtree, folder, True)
+        self.fake_model(folder)
+        spec = ModelSpec("hand", "fake_model.task", "0" * 64, "test", "local test file", "test")
+        with self.assertRaises(ModelIntegrityError) as ctx:
+            verify_model(spec, folder)
+        self.assertIn("SHA-256 mismatch", str(ctx.exception))
+
+    def test_missing_file_is_refused(self):
+        from model_registry import ModelIntegrityError, ModelSpec, verify_model
+        folder = Path(tempfile.mkdtemp(prefix="model_none_"))
+        self.addCleanup(shutil.rmtree, folder, True)
+        spec = ModelSpec("hand", "fake_model.task", "0" * 64, "test", "local test file", "test")
+        with self.assertRaises(ModelIntegrityError):
+            verify_model(spec, folder)
+
+    def test_job_is_refused_with_503_and_no_worker_starts_when_the_model_is_missing(self):
+        import model_registry as mr
+        empty = Path(tempfile.mkdtemp(prefix="model_empty_"))
+        self.addCleanup(shutil.rmtree, empty, True)
+        self.make_session()
+        with mock.patch.object(mr, "MODELS_DIR", empty), mock.patch.object(jobs.JobRunner, "start") as start:
+            status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
+        self.assertEqual((status, body["code"]), (503, "model_integrity"))
+        self.assertFalse(start.called, "a worker was started without a verified model")
+        self.assertEqual(self.svc.store.list(limit=10), [], "a job row was written for a refused model")
+
+    def test_job_is_accepted_when_the_model_matches(self):
+        import model_registry as mr
+        folder = Path(tempfile.mkdtemp(prefix="model_match_"))
+        self.addCleanup(shutil.rmtree, folder, True)
+        digest = self.fake_model(folder)
+        from model_registry import ModelSpec
+        spec = ModelSpec("hand", "fake_model.task", digest, "test", "local test file", "test")
+        self.make_session()
+        with mock.patch.object(mr, "MODELS_DIR", folder), mock.patch.dict(mr.MODELS, {"hand": spec}), \
+                mock.patch.object(jobs.JobRunner, "start"):
+            status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
+        self.assertEqual(status, 202, body)
 
 
 class StartupLogTests(JobCase):
