@@ -57,7 +57,7 @@ V1_FILES = ("facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Process an existing V1 session into a V2 session with Pose Landmarker output.")
+        description="Build pose data (Pose Landmarker output) for a session that already has face data.")
     parser.add_argument("person", help="person or project folder, e.g. sameer_gupta")
     parser.add_argument("session", help="session ID, e.g. session-001")
     parser.add_argument("--regenerate-v2", action="store_true",
@@ -101,8 +101,8 @@ def _rollback_after_v1_change(dataset: Path, had_previous: bool) -> str:
         return (f"rollback ran but the session is '{layout}' instead of '{expected}'. "
                 "Check the session folder by hand.")
     if had_previous:
-        return "rolled back: the previous V2 dataset was restored; version 1 files are not changed by the rollback."
-    return "rolled back: no V2 dataset remains; version 1 files are not changed by the rollback."
+        return "rolled back: the previous pose data was restored; face data files are not changed by the rollback."
+    return "rolled back: no pose data remains; face data files are not changed by the rollback."
 
 
 def main(argv=None, detector_factory=None) -> int:
@@ -122,13 +122,13 @@ def main(argv=None, detector_factory=None) -> int:
         _error(f"raw video not found: {video}")
         return EXIT_REFUSED
     if not (dataset / "facial_data.json").is_file():
-        _error(f"version 1 facial data not found: {dataset / 'facial_data.json'}. "
+        _error(f"face data not found: {dataset / 'facial_data.json'}. "
                "Run extract_faces.py for this session first.")
         return EXIT_REFUSED
 
     layout = session_layout(dataset)
     if layout == "v2" and not args.regenerate_v2:
-        _error("a complete version 2 dataset already exists. Rerun with --regenerate-v2 to replace it.")
+        _error("pose data already exists. Rerun with --regenerate-v2 to replace it.")
         return EXIT_REFUSED
 
     try:
@@ -153,11 +153,11 @@ def main(argv=None, detector_factory=None) -> int:
         pose = extract_pose_video(video, detector=detector)
         print(f"  frames: {pose.image.shape[0]}, pose detected on {int(pose.detected.sum())} "
               f"({pose.detection_rate:.1%})")
-        print("Building the V2 session payload...")
+        print("Building the pose data payload...")
         payload = build_payload(dataset_dir=dataset, pose=pose, fps=info.fps,
                                 person=args.person, session_id=args.session,
                                 video_filename=video.name, video_size=(info.width, info.height))
-        print("Publishing the V2 session...")
+        print("Publishing the pose data...")
         write_v2_session(dataset, payload, regenerate=args.regenerate_v2)
     except V2ExistsError as exc:
         _error(str(exc))
@@ -177,12 +177,12 @@ def main(argv=None, detector_factory=None) -> int:
     after = version_one_fingerprint(dataset)
     if after != before:
         changed = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
-        _error("version 1 files changed during processing: " + ", ".join(changed))
+        _error("face data files changed during processing: " + ", ".join(changed))
         _error(_rollback_after_v1_change(dataset, had_previous=(layout == "v2")))
         return EXIT_V1_CHANGED
 
-    print(f"V2 session published: {dataset}")
-    print("Version 1 files: unchanged.")
+    print(f"Pose data published: {dataset}")
+    print("Face data files: unchanged.")
     return EXIT_OK
 
 

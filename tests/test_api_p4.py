@@ -31,7 +31,7 @@ print("Video: fake.mp4 (64x48, 25.000 fps)", flush=True)
 print("Pose Landmarker FULL loaded (SHA-256 verified).", flush=True)
 print("Extracting pose landmarks...", flush=True)
 if mode == "ok":
-    print("V2 session published: fake", flush=True)
+    print("Pose data published: fake", flush=True)
     sys.exit(0)
 if mode == "fail":
     print("boom", flush=True)
@@ -181,7 +181,7 @@ class LifecycleTests(P4TestCase):
         self.assertEqual(done["stage"], "verify")
         self.assertEqual(done["progress"], 1.0)
         log = jobs.service().runner.log_path(job["id"]).read_text(encoding="utf-8")
-        self.assertIn("V2 session published", log)
+        self.assertIn("Pose data published", log)
 
     def test_failure_is_recorded_with_its_exit_code(self):
         status, job = self.post_job("session-002")
@@ -314,6 +314,13 @@ class ProgressParsingTests(unittest.TestCase):
         self.assertEqual(jobs.parse_progress("v1_extract", "Processed: 300", state), ("extract", 0.99))
         self.assertEqual(jobs.parse_progress("v1_extract", "Processing completed!", state), ("publish", 0.99))
         self.assertIsNone(jobs.parse_progress("v1_extract", "FPS: 30.0", state))
+
+    def test_build_markers_use_the_current_wording(self):
+        self.assertEqual(jobs.parse_progress("pose_build", "Building the pose data payload...", {}), ("assemble", 4 / 6))
+        self.assertEqual(jobs.parse_progress("pose_build", "Publishing the pose data...", {}), ("publish", 5 / 6))
+        self.assertEqual(jobs.parse_progress("pose_build", "Pose data published: /x", {}), ("verify", 1.0))
+        # the older wording is no longer read as a progress marker
+        self.assertIsNone(jobs.parse_progress("pose_build", "V2 session published: /x", {}))
 
     def test_analysis_and_build_markers(self):
         self.assertEqual(jobs.parse_progress("v1_analyse", "CSV created: x", {}), ("assemble", 0.25))

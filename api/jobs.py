@@ -61,9 +61,9 @@ V2_MARKERS = (
     ("Video:", "validate"),
     ("Pose Landmarker FULL loaded", "model"),
     ("Extracting pose", "extract"),
-    ("Building the V2", "assemble"),
-    ("Publishing", "publish"),
-    ("V2 session published", "verify"),
+    ("Building the pose data", "assemble"),
+    ("Publishing the pose data", "publish"),
+    ("Pose data published", "verify"),
 )
 V1_ANALYSE_MARKERS = (
     ("CSV created:", "assemble", 0.25),
@@ -75,7 +75,7 @@ EXIT_MESSAGES = {
     1: "failed; see the job log",
     2: "refused or invalid input; see the job log",
     3: "the Pose model failed its SHA-256 check",
-    4: "version 1 files changed during the build and were rolled back",
+    4: "face data files changed during the build and were rolled back",
 }
 
 _TOTAL_RE = re.compile(r"^Total frames:\s*(\d+)")

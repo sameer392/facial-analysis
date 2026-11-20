@@ -387,13 +387,13 @@ def _move_previous(session: Path, manifest: dict | None) -> Path | None:
     if manifest is None:
         # Without a readable manifest we cannot tell which files are version 2 output, so refuse
         # rather than overwrite them. Nothing has been moved at this point.
-        raise V2Error("existing version 2 manifest is unreadable; refusing to replace the dataset")
+        raise V2Error("existing pose data manifest is unreadable; refusing to replace the dataset")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     previous = session / f"{PREVIOUS_PREFIX}{stamp}-{uuid.uuid4().hex[:8]}"
     listed = [e["path"] for e in manifest.get("files", [])] + [MANIFEST_FILE, METADATA_FILE]
     for rel in listed:
         if rel in V1_PROTECTED_NAMES:
-            raise V2Error(f"refusing to move a version 1 name: {rel}")
+            raise V2Error(f"refusing to move a face data name: {rel}")
         src = _rel_to_path(rel, session)
         if src.is_file():
             dest = _rel_to_path(rel, previous)
@@ -447,7 +447,7 @@ def _acquire_lock(session: Path) -> Path:
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        raise V2Error(f"another version 2 operation holds {lock}. If none is running, "
+        raise V2Error(f"another pose data operation holds {lock}. If none is running, "
                       "run recover_incomplete_v2 for this session.")
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(f"pid={os.getpid()}\n")
@@ -493,7 +493,7 @@ def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = Fals
         _recover_files(session)  # not recover_incomplete_v2: that would remove our own lock
         layout = session_layout(session)
     if layout == "v2" and not regenerate:
-        raise V2ExistsError(f"complete version 2 dataset exists: {session}. Use regenerate=True (--regenerate-v2).")
+        raise V2ExistsError(f"complete pose data exists: {session}. Use regenerate=True (--regenerate-v2).")
 
     prevalidate(payload)
 
@@ -503,7 +503,7 @@ def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = Fals
     if layout == "v2":
         old_manifest = _load_manifest(session / MANIFEST_FILE)
         if old_manifest is None:
-            raise V2Error("existing version 2 manifest is unreadable; refusing to replace the dataset")
+            raise V2Error("existing pose data manifest is unreadable; refusing to replace the dataset")
         owned = {e["path"] for e in old_manifest.get("files", [])} | {MANIFEST_FILE, METADATA_FILE}
     collisions = [rel for rel in _planned_paths(payload)
                   if rel not in owned and _rel_to_path(rel, session).exists()]

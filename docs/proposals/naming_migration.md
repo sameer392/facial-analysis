@@ -1,6 +1,6 @@
 # Proposal: remove version names from the product (naming migration)
 
-Status: Step 0 (backup) and Step 1 (new names, old names accepted) are done. Step 2 (feature paths and job codes, old ones kept) is done. Steps 3 to 5 are not started.
+Status: Steps 0, 1 and 2 are done. Step 3 (printed output and the job parser) is done: the scripts print the new wording, and the parser reads only the new markers. Steps 4 and 5 are not started.
 
 ## 1. Goal
 
