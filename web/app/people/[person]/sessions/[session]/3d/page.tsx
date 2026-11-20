@@ -399,6 +399,33 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
             Drag to turn ({camBeta.toFixed(0)}°, {camAlpha.toFixed(0)}°), wheel to zoom ({zoom.toFixed(2)}×). Points are coloured by
             depth: red is nearer, blue is further. The mesh and contours use MediaPipe&apos;s own connections, as on the Overlay page.
           </p>
+          {landmarks.data.points.some((p) => p[0] != null) ? (
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm underline">Coordinates for frame {frame} ({landmarks.data.points.length} landmarks)</summary>
+              <div className="mt-3 max-h-[480px] overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-[var(--muted)]">
+                    <tr>
+                      <th scope="col" className="py-2 pr-3 font-medium">ID</th>
+                      <th scope="col" className="py-2 pr-3 font-medium">x</th>
+                      <th scope="col" className="py-2 pr-3 font-medium">y</th>
+                      <th scope="col" className="py-2 font-medium">z</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {landmarks.data.points.map((p, i) => (
+                      <tr key={i} className="border-t border-[var(--border)]">
+                        <td className="py-1 pr-3">{i}</td>
+                        <td className="py-1 pr-3">{p[0] == null ? "n/a" : p[0].toFixed(5)}</td>
+                        <td className="py-1 pr-3">{p[1] == null ? "n/a" : p[1].toFixed(5)}</td>
+                        <td className="py-1">{p[2] == null ? "n/a" : p[2].toFixed(5)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          ) : null}
         </Card>
       ) : landmarks.isPending && pose.isSuccess ? (
         <Card title="Landmarks">
