@@ -250,3 +250,15 @@ class BlendshapeCsvTests(P2TestCase):
         path = face_data.blendshapes_csv_path("demo_person", "session-001")
         self.assertEqual(path.name, "facial_blendshapes.csv")
         self.assertTrue(path.is_file())
+
+
+class ComparisonBlendshapeTests(P2TestCase):
+    def test_comparison_gives_blendshape_means_and_landmark_stability(self):
+        result = face_data.comparison("demo_person", ["session-001", "session-002"])
+        self.assertIn("jawOpen", result["blendshape_means"])
+        self.assertEqual(set(result["blendshape_means"]["jawOpen"]), {"session-001", "session-002"})
+        for row in result["sessions"]:
+            self.assertIn("landmark_stability", row)
+        frames = face_data._face_frames("demo_person", "session-001")
+        values = [f["blendshapes"]["jawOpen"] for f in frames if f.get("blendshapes", {}).get("jawOpen") is not None]
+        self.assertAlmostEqual(result["blendshape_means"]["jawOpen"]["session-001"], sum(values) / len(values), places=6)

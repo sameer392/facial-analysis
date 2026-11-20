@@ -60,7 +60,9 @@ export type Comparison = {
     detection_rate: number | null;
     blink_events: number;
     neutral_frames: number;
+    landmark_stability: number | null;
   }[];
+  blendshape_means: Record<string, Record<string, number | null>>;
   distributions: Record<string, { edges: (number | null)[]; shares: Record<string, (number | null)[]> }>;
 };
 

@@ -99,6 +99,7 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
                 <th scope="col" className="py-2 font-medium">Detection</th>
                 <th scope="col" className="py-2 font-medium">Blinks</th>
                 <th scope="col" className="py-2 font-medium">Neutral frames</th>
+                <th scope="col" className="py-2 font-medium">Landmark stability</th>
               </tr>
             </thead>
             <tbody>
@@ -110,6 +111,35 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
                   <td className="py-2">{r.detection_rate == null ? "n/a" : `${(r.detection_rate * 100).toFixed(1)} %`}</td>
                   <td className="py-2">{r.blink_events}</td>
                   <td className="py-2">{r.neutral_frames}</td>
+                  <td className="py-2">{r.landmark_stability == null ? "n/a" : r.landmark_stability.toFixed(5)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Landmark stability is the median per-landmark standard deviation of head-pose compensated positions. Lower values mean the face shape was steadier.
+          </p>
+        </Card>
+      ) : null}
+
+      {comparison.data && Object.keys(comparison.data.blendshape_means).length > 0 ? (
+        <Card title="Blendshape statistics (mean score per session)">
+          <table className="w-full text-left text-sm">
+            <thead className="text-[var(--muted)]">
+              <tr>
+                <th scope="col" className="py-2 font-medium">Blendshape</th>
+                {comparison.data.sessions.map((r) => (
+                  <th key={r.session_id} scope="col" className="py-2 font-medium font-mono">{r.session_id}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(comparison.data.blendshape_means).map(([name, bySession]) => (
+                <tr key={name} className="border-t border-[var(--border)]">
+                  <td className="py-2">{name}</td>
+                  {comparison.data.sessions.map((r) => (
+                    <td key={r.session_id} className="py-2">{bySession[r.session_id] == null ? "n/a" : bySession[r.session_id]!.toFixed(4)}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>

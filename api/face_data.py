@@ -28,6 +28,11 @@ SERIES_FIELDS = (
     "jaw_open", "mouth_activity", "eye_blink", "brow_inner_up", "yaw_deg", "pitch_deg", "roll_deg",
     "is_neutral",
 )
+COMPARISON_BLENDSHAPES = (
+    "jawOpen", "mouthSmileLeft", "mouthSmileRight", "mouthPucker", "mouthFunnel",
+    "eyeBlinkLeft", "eyeBlinkRight", "eyeWideLeft", "eyeWideRight",
+    "browDownLeft", "browDownRight", "browInnerUp",
+)
 COMPARISON_METRICS = ("jaw_open", "mouth_activity", "eye_blink", "brow_inner_up", "velocity", "acceleration")
 HISTOGRAM_BINS = 20
 
@@ -145,7 +150,15 @@ def comparison(person: str, sessions: list[str]) -> dict:
             "detection_rate": _scalar(result.quality["detection_rate"]),
             "blink_events": int(len(result.blinks)),
             "neutral_frames": int(result.neutral_frames),
+            "landmark_stability": _scalar(np.nanmedian(np.nanstd(result.compensated, axis=0))),
         })
+    blend_means: dict = {name: {} for name in COMPARISON_BLENDSHAPES}
+    for sid in analyses:
+        dataset = fa.load_session(fa.make_session(person, sid))
+        for name in COMPARISON_BLENDSHAPES:
+            if name in dataset.blendshapes:
+                blend_means[name][sid] = _scalar(dataset.blendshapes[name].mean())
+    blend_means = {name: sids for name, sids in blend_means.items() if any(v is not None for v in sids.values())}
     distributions = {}
     for metric in COMPARISON_METRICS:
         values = {sid: result.table[metric].to_numpy(dtype=float) for sid, result in analyses.items()}
@@ -161,7 +174,7 @@ def comparison(person: str, sessions: list[str]) -> dict:
             total = int(v.size)
             shares[sid] = [_scalar(c / total) if total else None for c in counts]
         distributions[metric] = {"edges": [_scalar(e) for e in edges], "shares": shares}
-    return {"sessions": rows, "distributions": distributions}
+    return {"sessions": rows, "blendshape_means": blend_means, "distributions": distributions}
 
 
 _topology_cache: dict = {}
