@@ -6,6 +6,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { api } from "../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 import { ConfirmDialog, RenameDialog } from "../components/manage-ui";
+import { UploadRecording } from "../components/upload-recording";
 
 type Target = { kind: "data" | "video"; person: string; session: string };
 type Renaming = { person: string; session: string };
@@ -52,10 +53,11 @@ export default function RecordingsPage() {
       <header>
         <h1 className="text-2xl font-semibold">Recordings</h1>
         <p className="text-sm text-[var(--muted)]">
-          Every recording across people, with its status. Delete the processed data or the video from its row.
+          Add a recording, or see every recording with its status. Delete the processed data or the video from its row.
           Deletions are permanent.
         </p>
       </header>
+      <UploadRecording />
       <Card>
         {loading ? <Loading label="Loading recordings…" /> : null}
         {failed ? <ErrorState message={(failed as Error).message} /> : null}

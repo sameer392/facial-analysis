@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useMemo, useState, type FormEvent } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useApiToken } from "../../lib/token";
 import { Badge, Card, Empty, ErrorState, Loading } from "../../components/ui";
-import { ConfirmDialog, NeedsToken, RenameDialog, errorText } from "../../components/manage-ui";
+import { ConfirmDialog, RenameDialog, errorText } from "../../components/manage-ui";
+import { UploadRecording } from "../../components/upload-recording";
 
 type Target = { kind: "data" | "video"; session: string };
 
@@ -15,8 +16,6 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
   const queryClient = useQueryClient();
   const [token, , tokenLoaded] = useApiToken();
   const sessions = useQuery({ queryKey: ["sessions", person], queryFn: () => api.sessions(person) });
-  const [file, setFile] = useState<File | null>(null);
-  const [session, setSession] = useState("");
   const [target, setTarget] = useState<Target | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const rename = useMutation({
@@ -24,28 +23,11 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
     onSuccess: (_r, v) => { setRenaming(null); setNotice(`Renamed ${v.from} to ${v.to}.`); refresh(); },
   });
   const [notice, setNotice] = useState<string | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
-
-  const suggested = useMemo(() => {
-    const used = (sessions.data ?? []).map((s) => Number(s.session_id.replace("session-", ""))).filter(Number.isFinite);
-    return `session-${String((used.length ? Math.max(...used) : 0) + 1).padStart(3, "0")}`;
-  }, [sessions.data]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["sessions", person] });
     queryClient.invalidateQueries({ queryKey: ["persons"] });
   };
-
-  const upload = useMutation({
-    mutationFn: () => api.uploadVideo(token, person, session || suggested, file as File, setProgress),
-    onSettled: () => setProgress(null),
-    onSuccess: (r) => {
-      setFile(null);
-      setSession("");
-      setNotice(`Uploaded ${r.session} (${(r.bytes / 1_048_576).toFixed(1)} MB). Run Face data on the Jobs page next.`);
-      refresh();
-    },
-  });
 
   const remove = useMutation({
     mutationFn: ({ token: t, target: tg }: { token: string; target: Target }) =>
@@ -58,12 +40,6 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
       refresh();
     },
   });
-
-  const onUpload = (event: FormEvent) => {
-    event.preventDefault();
-    if (!tokenLoaded || token === "") return;
-    upload.mutate();
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,43 +55,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
 
       {notice ? <p role="status" className="text-sm font-medium">{notice}</p> : null}
 
-      <Card title="Add a recording">
-        <form onSubmit={onUpload} className="grid gap-3 text-sm md:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            Session (suggested: {suggested})
-            <input
-              value={session}
-              placeholder={suggested}
-              onChange={(e) => setSession(e.target.value)}
-              className="rounded border border-[var(--border)] bg-transparent px-2 py-1 font-mono"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            MP4 video (at most 2 GB)
-            <input type="file" accept="video/mp4" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs" />
-          </label>
-          <div className="md:col-span-2">
-            <NeedsToken token={token} loaded={tokenLoaded} />
-          </div>
-          {progress !== null ? (
-            <div className="md:col-span-2">
-              <progress value={progress} max={1} className="w-full" aria-label="Upload progress" />
-              <p className="text-xs text-[var(--muted)]">{Math.round(progress * 100)} % sent</p>
-            </div>
-          ) : null}
-          <div className="flex items-center gap-3 md:col-span-2">
-            <button
-              type="submit"
-              disabled={!tokenLoaded || token === "" || !file || upload.isPending}
-              className="rounded border border-[var(--border)] px-3 py-1.5 disabled:opacity-50"
-            >
-              {upload.isPending ? "Uploading…" : "Upload"}
-            </button>
-            <p className="text-xs text-[var(--muted)]">An existing session name is refused; nothing is overwritten.</p>
-          </div>
-          {upload.isError ? <div className="md:col-span-2"><ErrorState {...errorText(upload.error)} /></div> : null}
-        </form>
-      </Card>
+      <UploadRecording fixedPerson={person} />
 
       <Card title="Sessions">
         {sessions.isPending ? <Loading label="Loading sessions…" /> : null}
