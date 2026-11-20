@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { WindowCache, WINDOW_SIZE, drawFrame, frameForTime, OVERLAY_COLOURS, windowStartFor } from "../lib/video-sync";
+import type { StreamName } from "../lib/hlw1";
 import { Card } from "./ui";
 
 const SPEEDS = [0.25, 0.5, 1, 1.5, 2] as const;
+const STREAMS: { key: StreamName; label: string }[] = [
+  { key: "face", label: "Face" },
+  { key: "body", label: "Body" },
+  { key: "left_hand", label: "Left hand" },
+  { key: "right_hand", label: "Right hand" },
+];
 
 /** A recording's current presentation time, as the browser reports it for each presented video frame. */
 export type PresentedFrame = { mediaTime: number; presentedFrames: number } | null;
+
+type OverlayStatus = "off" | "synchronized" | "loading" | "unavailable";
 
 /** m:ss.mmm for display. */
 function clock(seconds: number): string {
@@ -18,31 +29,34 @@ function clock(seconds: number): string {
 }
 
 /**
- * The original recording, played by the browser's own video element (H8.3). The file is streamed by the API with
- * HTTP Range support; nothing is copied, re-encoded or downloaded whole. Frame review is a separate control.
+ * The original recording, played by the browser's video element, with the extracted landmarks drawn on a transparent
+ * canvas over it (H8.4).
  *
- * Before the source is set, a one-byte Range request checks that the recording exists, so a missing or unreadable
- * recording shows a clear message rather than a generic media error.
+ * Synchronisation: each presented video frame's media time is mapped to a frame of the extracted timeline. The
+ * landmarks for that frame come from a cache of 30-frame windows. The video never waits for landmark data.
+ * If the recording fails the timing check, the overlays are switched off and the video plays normally.
  *
- * The parent should give this component a key of person and session, so switching sessions releases the old source.
- * presentedRef is kept up to date from requestVideoFrameCallback, for the landmark overlay (H8.4). It does not
- * cause React renders.
+ * The canvas is the same size as the video element's box, so landmarks cannot be stretched independently of the
+ * picture. Parent components should key this component by person and session, so switching sessions starts afresh.
  */
 export function HandVideoPlayer({
   person,
   session,
   fpsHint,
   presentedRef,
-  onElement,
 }: {
   person: string;
   session: string;
   fpsHint: number | null;
   presentedRef?: MutableRefObject<PresentedFrame>;
-  onElement?: (el: HTMLVideoElement | null) => void;
 }) {
   const url = api.videoUrl(person, session);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const lastMediaTime = useRef(0);
+  const lastStatus = useRef<OverlayStatus>("off");
+
   const [status, setStatus] = useState<"checking" | "ready" | "error">("checking");
   const [message, setMessage] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -54,7 +68,52 @@ export function HandVideoPlayer({
   const [volume, setVolume] = useState(1);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
-  // Check the recording exists before setting the source. The Range request asks for one byte only.
+  const [master, setMaster] = useState(true);
+  const [enabled, setEnabled] = useState<Record<StreamName, boolean>>({ face: true, body: true, left_hand: true, right_hand: true });
+  const [overlayStatus, setOverlayStatus] = useState<OverlayStatus>("off");
+  const [overlayNote, setOverlayNote] = useState("");
+  // Read by the render loop without re-rendering the page.
+  const enabledRef = useRef({ master, enabled });
+  enabledRef.current = { master, enabled };
+
+  const timing = useQuery({
+    queryKey: ["video-timing", person, session],
+    queryFn: () => api.videoTiming(person, session),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const timeline = useQuery({
+    queryKey: ["pose-timeline", person, session],
+    queryFn: () => api.poseTimeline(person, session),
+    retry: false,
+  });
+  const topology = useQuery({ queryKey: ["face-topology"], queryFn: api.faceTopology, staleTime: Infinity, retry: false });
+
+  const timestamps = useMemo(() => {
+    if (!timeline.data) return null;
+    return Float64Array.from(timeline.data.map((r) => Number(r.timestamp_ms)));
+  }, [timeline.data]);
+  const timestampsRef = useRef<Float64Array | null>(null);
+  timestampsRef.current = timestamps;
+  const faceEdgesRef = useRef<[number, number][]>([]);
+  faceEdgesRef.current = topology.data ? (topology.data.regions ? Object.values(topology.data.regions).flatMap((r) => r.edges as [number, number][]) : []) : [];
+
+  const overlayAllowed = timing.data?.status === "synchronized" && timestamps !== null;
+
+  // Windows of landmarks, one cache per session. Cleared when the session changes or the page unmounts.
+  const cache = useMemo(() => new WindowCache((start) => api.landmarkWindowUrl(person, session, start, WINDOW_SIZE)), [person, session]);
+  useEffect(() => {
+    const onChange = () => render(lastMediaTime.current);
+    cache.setOnChange(onChange);
+    return () => {
+      cache.setOnChange(null);
+      cache.clear();
+    };
+    // render is recreated each render, but reads only refs, so the effect needs to run only for a new cache
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cache]);
+
+  // The recording must exist before the source is set. The Range request asks for one byte only.
   useEffect(() => {
     const controller = new AbortController();
     setStatus("checking");
@@ -83,32 +142,123 @@ export function HandVideoPlayer({
     return () => controller.abort();
   }, [url]);
 
-  // Frame clock for the overlay: records each presented frame's media time without rendering.
+  /** Draw the landmarks for one media time. Clears the overlay when it is off or not available. */
+  function render(mediaTime: number) {
+    lastMediaTime.current = mediaTime;
+    const canvas = canvasRef.current;
+    const wrapper = wrapperRef.current;
+    const ts = timestampsRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !wrapper || !ctx) return;
+    const cssW = wrapper.clientWidth;
+    const cssH = wrapper.clientHeight;
+    const { master: on, enabled: want } = enabledRef.current;
+    const anyStream = STREAMS.some((s) => want[s.key]);
+    if (!on || !anyStream || !overlayAllowedRef.current || !ts) {
+      ctx.clearRect(0, 0, cssW, cssH);
+      setOverlayState(on && anyStream ? "unavailable" : "off", "");
+      return;
+    }
+    const frame = frameForTime(ts, mediaTime);
+    const start = windowStartFor(frame);
+    cache.ensure(start);
+    cache.ensure(start + WINDOW_SIZE);
+    if (start >= WINDOW_SIZE) cache.ensure(start - WINDOW_SIZE);
+    const entry = cache.get(start);
+    if (entry?.state === "ready" && frame < entry.window.start + entry.window.count) {
+      drawFrame(ctx, entry.window, frame, { enabled: want, cssWidth: cssW, cssHeight: cssH, faceEdges: faceEdgesRef.current });
+      setOverlayState("synchronized", "");
+    } else if (entry?.state === "error") {
+      ctx.clearRect(0, 0, cssW, cssH);
+      setOverlayState("unavailable", entry.message);
+    } else {
+      ctx.clearRect(0, 0, cssW, cssH);
+      setOverlayState("loading", "");
+    }
+  }
+
+  // Overlay availability, read by the render loop.
+  const overlayAllowedRef = useRef(false);
+  overlayAllowedRef.current = overlayAllowed;
+
+  /** Update the status text only when it changes, so the render loop does not re-render the page. */
+  function setOverlayState(next: OverlayStatus, note: string) {
+    if (lastStatus.current !== next) {
+      lastStatus.current = next;
+      setOverlayStatus(next);
+    }
+    setOverlayNote((prev) => (prev === note ? prev : note));
+  }
+
+  // Keep the canvas backing store matched to the video's CSS box, at the device's pixel ratio.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    const canvas = canvasRef.current;
+    if (!wrapper || !canvas || status !== "ready") return;
+    const fit = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = wrapper.clientWidth;
+      const h = wrapper.clientHeight;
+      canvas.width = Math.max(1, Math.round(w * dpr));
+      canvas.height = Math.max(1, Math.round(h * dpr));
+      const ctx = canvas.getContext("2d");
+      ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      render(lastMediaTime.current);
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(wrapper);
+    fit();
+    return () => observer.disconnect();
+    // render reads refs only, so it does not need to be a dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, size]);
+
+  // Drive the overlay from the video's presented frames. Where requestVideoFrameCallback is missing, follow the
+  // video's own currentTime each animation frame. Neither path uses a timer of its own.
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || status !== "ready" || !presentedRef) return;
+    if (!el || status !== "ready") return;
     const withFrames = el as HTMLVideoElement & {
       requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number; presentedFrames: number }) => void) => number;
       cancelVideoFrameCallback?: (id: number) => void;
     };
-    if (!withFrames.requestVideoFrameCallback || !withFrames.cancelVideoFrameCallback) return;
-    let handle = 0;
     let active = true;
-    const tick = (_now: number, meta: { mediaTime: number; presentedFrames: number }) => {
+    let handle = 0;
+    const onSeeked = () => render(el.currentTime);
+    el.addEventListener("seeked", onSeeked);
+
+    if (withFrames.requestVideoFrameCallback && withFrames.cancelVideoFrameCallback) {
+      const tick = (_now: number, meta: { mediaTime: number; presentedFrames: number }) => {
+        if (!active) return;
+        if (presentedRef) presentedRef.current = { mediaTime: meta.mediaTime, presentedFrames: meta.presentedFrames };
+        render(meta.mediaTime);
+        handle = withFrames.requestVideoFrameCallback!(tick);
+      };
+      handle = withFrames.requestVideoFrameCallback(tick);
+      return () => {
+        active = false;
+        el.removeEventListener("seeked", onSeeked);
+        withFrames.cancelVideoFrameCallback!(handle);
+        if (presentedRef) presentedRef.current = null;
+      };
+    }
+
+    const frameLoop = () => {
       if (!active) return;
-      presentedRef.current = { mediaTime: meta.mediaTime, presentedFrames: meta.presentedFrames };
-      handle = withFrames.requestVideoFrameCallback!(tick);
+      render(el.currentTime);
+      handle = requestAnimationFrame(frameLoop);
     };
-    handle = withFrames.requestVideoFrameCallback(tick);
+    handle = requestAnimationFrame(frameLoop);
     return () => {
       active = false;
-      withFrames.cancelVideoFrameCallback!(handle);
-      presentedRef.current = null;
+      el.removeEventListener("seeked", onSeeked);
+      cancelAnimationFrame(handle);
     };
-  }, [status, presentedRef]);
+    // render reads refs only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
-  // Release the media when the player leaves the page, or the recording changes or fails. The element is captured
-  // here, because React clears the ref before cleanups run.
+  // Release the media when the player leaves the page, or the recording changes or fails.
   useEffect(() => {
     if (status !== "ready") return;
     const el = videoRef.current;
@@ -118,11 +268,14 @@ export function HandVideoPlayer({
         el.removeAttribute("src");
         el.load();
       }
-      onElement?.(null);
     };
-    // onElement is a parent callback; the release should run only when the recording or status changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, url]);
+
+  // Redraw when the overlay settings change, even while paused.
+  useEffect(() => {
+    render(lastMediaTime.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [master, enabled, overlayAllowed]);
 
   const toggle = () => {
     const el = videoRef.current;
@@ -160,6 +313,14 @@ export function HandVideoPlayer({
     setMuted(next);
     if (el) el.muted = next;
   };
+  const setStream = (key: StreamName, on: boolean) => setEnabled((prev) => ({ ...prev, [key]: on }));
+
+  const statusText: Record<OverlayStatus, string> = {
+    off: "Overlay off",
+    synchronized: "Synchronised with the video",
+    loading: "Loading landmarks…",
+    unavailable: "Overlay unavailable for these frames",
+  };
 
   return (
     <Card title="Recording playback">
@@ -173,17 +334,15 @@ export function HandVideoPlayer({
 
       {status === "ready" ? (
         <>
-          <div className="relative flex justify-center bg-black">
+          <div ref={wrapperRef} className="relative mx-auto bg-black" style={size ? { maxWidth: size.w } : undefined}>
             <video
               ref={(el) => {
                 videoRef.current = el;
-                onElement?.(el);
               }}
               src={url}
               preload="metadata"
               playsInline
-              className="h-auto w-full"
-              style={size ? { maxWidth: size.w } : undefined}
+              className="block h-auto w-full"
               onLoadedMetadata={(e) => {
                 const el = e.currentTarget;
                 setSize({ w: el.videoWidth, h: el.videoHeight });
@@ -207,6 +366,11 @@ export function HandVideoPlayer({
                   ? "This file cannot be decoded by the browser. The recording may be unsupported."
                   : "Playback failed. Try reloading the page.");
               }}
+            />
+            <canvas
+              ref={canvasRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 h-full w-full"
             />
             {loading ? (
               <span className="absolute right-3 top-3 rounded bg-black/70 px-2 py-1 text-xs text-white">Buffering…</span>
@@ -260,8 +424,48 @@ export function HandVideoPlayer({
               {size ? <span className="text-[var(--muted)]"> · {size.w} × {size.h} px</span> : null}
             </p>
           </div>
+
+          <div className="mt-4 rounded border border-[var(--border)] p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 font-medium">
+                <input type="checkbox" checked={master} disabled={!overlayAllowed}
+                  onChange={(e) => setMaster(e.target.checked)} />
+                Landmark overlay
+              </label>
+              {STREAMS.map((s) => (
+                <label key={s.key} className="flex items-center gap-2">
+                  <span aria-hidden="true" className="inline-block h-3 w-3 rounded-full"
+                    style={{ background: OVERLAY_COLOURS[s.key] }} />
+                  <input type="checkbox" checked={enabled[s.key]} disabled={!overlayAllowed || !master}
+                    onChange={(e) => setStream(s.key, e.target.checked)} />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+
+            <p className="mt-2" aria-live="polite">
+              <span className="font-medium">
+                {!overlayAllowed && timing.isPending ? "Checking timing…" : null}
+                {!overlayAllowed && !timing.isPending ? "Timing verification failed" : null}
+                {overlayAllowed ? statusText[overlayStatus] : null}
+              </span>
+              {overlayNote ? <span className="text-[var(--muted)]"> · {overlayNote}</span> : null}
+            </p>
+            {timing.data && timing.data.status !== "synchronized" ? (
+              <p role="alert" className="mt-1 text-sm text-red-800">
+                Landmark overlays are disabled for this recording: {timing.data.reason || "the frame times could not be verified"}.
+                Playback is unaffected.
+              </p>
+            ) : null}
+            {timing.isError || timeline.isError ? (
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Landmark overlays need the pose data for this session. Playback is unaffected.
+              </p>
+            ) : null}
+          </div>
+
           <p className="mt-2 text-xs text-[var(--muted)]">
-            Playback uses the original recording, not extracted frames. The frame number is not shown during playback.
+            Playback uses the original recording. Landmarks come from the extracted data, matched to the frame on screen.
           </p>
         </>
       ) : null}

@@ -302,6 +302,16 @@ export type HandGestureQuality = {
   scope: string;
 };
 
+export type VideoTiming = {
+  status: "synchronized" | "deviation" | "unavailable";
+  reason?: string;
+  frames_checked?: number;
+  frames_in_timeline?: number;
+  max_gap_ms?: number;
+  tolerance_ms?: number;
+  fps_reported?: number;
+};
+
 export type HandValidation = {
   session: string;
   valid: boolean;
@@ -556,6 +566,12 @@ export const api = {
     get<HandGestureQuality>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/quality/gestures`),
   handValidation: (person: string, session: string) =>
     get<HandValidation>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/validation`),
+  /** Timing check between the recording and the extracted timeline (H8.2). Overlays need status "synchronized". */
+  videoTiming: (person: string, session: string) =>
+    get<VideoTiming>(`/persons/${enc(person)}/sessions/${enc(session)}/video/timing`),
+  /** A window of 30 frames of landmarks in the HLW1 binary format (see lib/hlw1.ts). */
+  landmarkWindowUrl: (person: string, session: string, start: number, count: number) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/landmarks/window?start=${start}&count=${count}`,
   /** The original recording, streamed by the API with HTTP Range support (H8.2). Read-only; localhost only. */
   videoUrl: (person: string, session: string) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/video`,
