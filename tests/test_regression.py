@@ -223,27 +223,5 @@ class ScriptCompileTests(unittest.TestCase):
                 py_compile.compile(str(path), doraise=True)
 
 
-class DashboardRunTests(unittest.TestCase):
-    """Runs the main app and every page headlessly and fails on any uncaught exception."""
-
-    def _run(self, path: Path):
-        from streamlit.testing.v1 import AppTest
-
-        at = AppTest.from_file(str(path), default_timeout=180)
-        at.run()
-        self.assertFalse(at.exception, f"{path.name} raised: {[e.value for e in at.exception]}")
-        return at
-
-    def test_main_app_runs(self):
-        self._run(DASHBOARD_DIR / "app.py")
-
-    def test_all_pages_run(self):
-        pages = sorted((DASHBOARD_DIR / "pages").glob("*.py"))
-        self.assertEqual(len(pages), 6)
-        for page in pages:
-            with self.subTest(page=page.name):
-                self._run(page)
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -3,7 +3,7 @@
 A research tool for measuring facial motion from video. It uses MediaPipe Face Landmarker to
 extract 478 face landmarks, 52-category blendshape scores and facial transformation matrices
 for every frame. It then computes motion and tracking-quality measures and shows them in a
-Streamlit dashboard. It is intended as groundwork for personalised AI digital humans. Model
+web dashboard (Next.js, with a Python API). It is intended as groundwork for personalised AI digital humans. Model
 training is not implemented yet.
 
 > **Privacy:** this project works with facial data. Keep your recordings and datasets out of
@@ -17,7 +17,7 @@ training is not implemented yet.
 | JSON and CSV export, one dataset per recording session | Implemented |
 | Motion analysis: head-pose compensation, neutral calibration, displacement, velocity, acceleration | Implemented |
 | Blink detection and tracking-quality metrics | Implemented |
-| Streamlit dashboard: people and sessions, add or process recordings, delete data, six pages | Implemented |
+| Next.js dashboard (`web/`) with the Python API (`api/`): people and sessions, add or process recordings, delete data, analysis pages | Implemented. The Streamlit dashboard was removed in phase P7 |
 | Overwrite protection (`--force` for analysis, never for extraction) | Implemented |
 | Synthetic demo data generator | Implemented |
 | Pose data schema and session writer (staging, manifest, lock, recovery, rollback) | Implemented |
@@ -51,7 +51,7 @@ flowchart LR
     J -->|analyze_faces.py| C[facial_blendshapes.csv]
     J --> A[facial_analyzer + motion_analyzer + facial_3d_analyzer]
     A --> O[motion_metrics.csv, blink_events.csv, tracking_quality.json, calibration.json]
-    C --> D[Streamlit dashboard]
+    C --> D[Python API, then Next.js dashboard]
     O --> D
     J --> D
     V --> D
@@ -73,7 +73,7 @@ facial-analysis/
 │   │   ├── file_safety.py         overwrite checks and atomic writes
 │   │   ├── project_paths.py       folder layout and name rules
 │   │   └── demo_data.py           synthetic demo recordings and datasets
-│   ├── dashboard/         Streamlit app (app.py) and pages/
+│   ├── dashboard/         overlay.py and pose_viewer.py (used by the API; no web framework)
 │   ├── extraction/        reserved for audio and body extractors (empty)
 │   ├── inference/         reserved for generation (empty)
 │   └── training/          reserved for model training (empty)
@@ -119,8 +119,13 @@ No recordings are needed to try the dashboard.
 ```powershell
 python src/analysis/demo_data.py .\demo_data
 $env:FACIAL_DATA_HOME = (Resolve-Path .\demo_data)
-streamlit run src\dashboard\app.py
+.\.venv\Scripts\uvicorn.exe api.main:app --host 127.0.0.1 --port 8000
+# in a second terminal, in web/:
+npm ci
+npm run dev
 ```
+
+Open http://localhost:3000.
 
 The demo writes three synthetic sessions for `demo_person` into `demo_data/`. The videos show a
 drawn cartoon face, and the landmarks are computed from the same geometry. The demo never
@@ -141,13 +146,10 @@ writes into the project's own `recordings/` or `datasets/` folders.
    ```powershell
    python src/analysis/analyze_faces.py <person> session-001
    ```
-4. Start the dashboard and select the person and session:
-   ```powershell
-   streamlit run src\dashboard\app.py
-   ```
+4. Start the API and the web dashboard (see the quick start), then select the person and session.
 
-The dashboard does steps 2 and 3 for you when you choose **Add or process a recording**. It
-can also upload a video and delete sessions or people (**Manage data**).
+The Jobs page does steps 2 and 3 for you. Recordings and People pages can upload a video, rename,
+and delete sessions or people.
 
 ### Overwrite protection
 

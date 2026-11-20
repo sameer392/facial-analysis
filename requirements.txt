@@ -17,8 +17,6 @@ opencv-contrib-python==5.1.0.95; sys_platform == "win32"
 opencv-contrib-python==5.0.0.93; sys_platform == "linux"
 numpy==2.4.6
 pandas==3.1.1
-streamlit==1.67.0
-plotly==7.1.0
 
 # API for the Next.js migration (phase P0: read-only). Added with approval.
 fastapi==0.165.0

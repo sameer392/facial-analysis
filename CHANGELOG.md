@@ -5,7 +5,15 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- Streamlit dashboard (phase P7, approved in writing). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. Streamlit and Plotly are removed from `requirements.txt`. The Next.js dashboard with the Python API replaces it.
+
 ### Added
+- Compare people page (`/compare`): compare sessions from several people. `GET /api/comparison?items=person/session,...`.
+- Interruptions chart and blink timeline on the Face analysis page.
+- Blendshape values for the selected frame, movement by region, blendshape CSV download, landmark coordinate tables, and the 3D coordinates table.
+- Rejected pose data folders with reasons on the Body Motion page.
+- Blendshape means and landmark stability in the dataset comparison.
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
 - Upload a recording from the Recordings page (choose the person) as well as from a person's page. One shared component.
 - API token: kept in `config/api_token.txt` (same across restarts) and entered once on the Settings page. Other pages no longer show a token box.

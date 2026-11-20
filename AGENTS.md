@@ -184,7 +184,7 @@ Do not describe a phase as implemented when only some of its steps are.
 - JSON and CSV exports
 - Head-pose compensation, neutral calibration, displacement, velocity and acceleration
 - Blink detection and tracking-quality metrics
-- Streamlit dashboard
+- Dashboard (Streamlit, removed in phase P7; the Next.js dashboard replaces it)
 
 ### Phase 2 â€” Multimodal Dataset Infrastructure: partially implemented
 
@@ -218,7 +218,7 @@ Do not describe a phase as implemented when only some of its steps are.
 - **Rename (person and recording): implemented.** `POST /api/persons/{p}/rename` and `POST /api/persons/{p}/sessions/{s}/rename` with body `{"to": "new-name"}`. Token required. Refused while processed data exists (it records the names), while a job runs, or when the new name is taken. Tests: `tests/test_api_manage.py`.
 - **Naming migration, step 5: done.** API paths are `/face/…` (face data) and `/pose/…` (pose data). Job codes are `face_build` and `pose_build`; rows saved with the older pose code are updated when the job store opens. Modules are `pose_schema`, `pose_writer`, `pose_viewer`, `pose_builder`, `build_pose_session.py`, `face_data.py` and `pose_data.py`. Pose data lock and temporary names are `.pose-lock`, `.pose-staging-*` and `.pose-previous-*`. Session rows include `layout_name`. Tests: `tests/test_naming_migration.py`. Plan: `docs/proposals/naming_migration.md`.
 - CI (`.github/workflows/tests.yml`) runs on pushes to `main` and `migration-nextjs`, and on pull requests.
-- Streamlit stays in the project until phase P7. The decided end state is Next.js only, with Streamlit removed.
+- **Phase P7, Streamlit removed: done** (written sign-off given). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. `src/dashboard/overlay.py` and `pose_viewer.py` remain because the API uses them. Streamlit and Plotly are removed from `requirements.txt`.
 
 ### Other status
 
@@ -304,7 +304,7 @@ Before changing these pins, inspect `requirements.txt`, `packages.txt` and the C
 
 ### System packages
 
-`packages.txt` lists the Linux system packages required by OpenCV: `libgl1` and `libglib2.0-0`. The CI workflow installs the same packages on Ubuntu. Streamlit Cloud reads `packages.txt`. Do not assume that `requirements.txt` alone is enough on every platform.
+`packages.txt` lists the Linux system packages required by OpenCV: `libgl1` and `libglib2.0-0`. The CI workflow installs the same packages on Ubuntu. Do not assume that `requirements.txt` alone is enough on every platform.
 
 ### Adding a dependency
 
@@ -316,15 +316,9 @@ Before changing these pins, inspect `requirements.txt`, `packages.txt` and the C
 
 ## 10. Development Container and Deployment Security
 
-`.devcontainer/devcontainer.json` is a development convenience. It runs on a Python 3.11 image, installs `packages.txt` and `requirements.txt`, and starts:
+`.devcontainer/devcontainer.json` is a development convenience. It runs on a Python 3.11 image and installs `packages.txt` and `requirements.txt`. It starts no server; start the API and `web/` as in the README.
 
-```text
-streamlit run src/dashboard/app.py --server.enableCORS false --server.enableXsrfProtection false
-```
-
-Those two flags disable cross-origin and request-forgery protections. **Never copy them into a public or shared deployment.**
-
-For any public deployment, including Streamlit Cloud:
+For any public deployment:
 
 - Use the default CORS and XSRF protections, or an equivalent reviewed configuration.
 - Configure trusted origins explicitly.

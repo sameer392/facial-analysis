@@ -12,8 +12,6 @@ relicense them. Licenses were read from each package's metadata in the developme
 | opencv-contrib-python | 5.1.0.95 (Windows); 5.0.0.93 (Linux) | Apache-2.0 |
 | numpy | 2.4.6 | BSD-3-Clause and other permissive terms (see the package's license file) |
 | pandas | 3.1.1 | BSD-3-Clause |
-| streamlit | 1.67.0 | Apache-2.0 |
-| plotly | 7.1.0 | MIT |
 
 Packages installed as indirect dependencies keep their own licenses. Check them with
 `pip show <package>` or `pip-licenses` if you redistribute a bundled environment.

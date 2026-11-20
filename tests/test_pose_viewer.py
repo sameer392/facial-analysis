@@ -221,14 +221,5 @@ class QualityTests(unittest.TestCase):
         self.assertIn("does not measure", summary["scope"])
 
 
-class ExistingDashboardTests(unittest.TestCase):
-    def test_face_helpers_still_import_and_the_body_page_runs_without_pose_data(self):
-        from streamlit.testing.v1 import AppTest
-
-        at = AppTest.from_file(str(ROOT / "src" / "dashboard" / "pages" / "04_Body_Motion.py"), default_timeout=120)
-        at.run()
-        self.assertFalse(at.exception)
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)
