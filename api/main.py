@@ -102,6 +102,11 @@ def comparison(person: str, sessions: str = ""):
 
 # ---- phase P3: pose data and head-pose data for the web pages (read-only) -------------------
 
+@app.get("/api/pose/rejected")
+def pose_rejected():
+    return pose_data.rejected()
+
+
 @app.get("/api/persons/{person}/sessions/{session}/pose")
 def pose_info(person: str, session: str):
     return pose_data.info(person, session)

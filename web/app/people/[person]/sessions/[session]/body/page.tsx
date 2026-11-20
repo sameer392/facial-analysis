@@ -16,6 +16,7 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
   const [skeleton, setSkeleton] = useState(true);
 
   const info = useQuery({ queryKey: ["pose-info", person, session], queryFn: () => api.poseInfo(person, session) });
+  const rejected = useQuery({ queryKey: ["pose-rejected"], queryFn: () => api.poseRejected() });
   const timeline = useQuery({
     queryKey: ["pose-timeline", person, session],
     queryFn: () => api.poseTimeline(person, session),
@@ -154,6 +155,15 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
             {quality.data ? <JointTable rows={quality.data.joints} /> : <Loading />}
           </Card>
         </>
+      ) : null}
+      {rejected.data && rejected.data.length > 0 ? (
+        <Card title={`${rejected.data.length} pose data folder(s) not shown (failed checks)`}>
+          <ul className="list-disc pl-5 text-sm">
+            {rejected.data.map((r) => (
+              <li key={r.path}><code>{r.path}</code>: {r.reason}</li>
+            ))}
+          </ul>
+        </Card>
       ) : null}
     </div>
   );

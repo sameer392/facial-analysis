@@ -190,3 +190,17 @@ def head_pose(person: str, session: str) -> dict:
         "roll_deg": [_scalar(v) for v in angles["roll_deg"].to_numpy()],
         "depth_range": [_scalar(v) for v in depth],
     }
+
+
+def rejected() -> list[dict]:
+    """Pose data folders that failed the checks, with the reason (the Body Motion page lists them)."""
+    _valid, rejected_rows = vv.discover_pose_sessions()
+    base = pp.DATASETS_ROOT
+    out = []
+    for path, reason in rejected_rows:
+        try:
+            shown = path.relative_to(base).as_posix()
+        except ValueError:
+            shown = path.name
+        out.append({"path": shown, "reason": str(reason)})
+    return out

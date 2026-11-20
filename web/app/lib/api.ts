@@ -338,6 +338,7 @@ export const api = {
     `/api/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/overlay.jpg?mode=${mode}&opacity=${opacity}&thickness=${thickness}&point_radius=${pointSize}`,
   headPose: (person: string, session: string) =>
     get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/face/head-pose`),
+  poseRejected: () => get<{ path: string; reason: string }[]>("/pose/rejected"),
   poseInfo: (person: string, session: string) =>
     get<PoseInfo>(`/persons/${enc(person)}/sessions/${enc(session)}/pose`),
   poseTimeline: (person: string, session: string) =>
