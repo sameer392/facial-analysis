@@ -277,6 +277,11 @@ def face_original(person: str, session: str, index: int):
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/persons/{person}/sessions/{session}/face/blendshapes/series")
+def face_blendshape_series(person: str, session: str, names: str = ""):
+    return face_data.blendshape_series(person, session, [n for n in names.split(",") if n])
+
+
 @app.get("/api/persons/{person}/sessions/{session}/face/frames/{index}/blendshapes")
 def face_blendshapes_frame(person: str, session: str, index: int):
     return face_data.blendshape_frame(person, session, index)

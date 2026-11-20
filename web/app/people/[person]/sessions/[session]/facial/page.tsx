@@ -22,12 +22,20 @@ const OVERLAY_MODES: [string, string][] = [
   ["off", "Off"],
 ];
 
+const REGION_GROUPS: [string, string[]][] = [
+  ["Mouth", ["jawOpen", "mouthPucker", "mouthFunnel", "mouthSmileLeft", "mouthSmileRight"]],
+  ["Eyes", ["eyeBlinkLeft", "eyeBlinkRight", "eyeWideLeft", "eyeWideRight"]],
+  ["Eyebrows", ["browDownLeft", "browDownRight", "browInnerUp", "browOuterUpLeft", "browOuterUpRight"]],
+];
+const REGION_NAMES = REGION_GROUPS.flatMap(([, names]) => names);
+
 const SECTIONS: [string, string][] = [
   ["summary", "Summary"],
   ["frame", "Video frame"],
   ["timeline", "Detection timeline"],
   ["motion", "Motion"],
   ["expressions", "Expressions and blinks"],
+  ["regions", "Movement by region"],
   ["head", "Head rotation"],
   ["landmarks", "Landmarks for one frame"],
 ];
@@ -86,6 +94,11 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
     queryFn: () => api.faceLandmarks(person, session, frame, true),
     enabled: summary.isSuccess,
     placeholderData: keepPreviousData,
+  });
+  const regionSeries = useQuery({
+    queryKey: ["face-blendshape-series", person, session],
+    queryFn: () => api.faceBlendshapeSeries(person, session, REGION_NAMES),
+    enabled: summary.isSuccess,
   });
   const blendFrame = useQuery({
     queryKey: ["face-blendshapes-frame", person, session, frame],
@@ -307,6 +320,33 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
             </table>
           ) : null}
         </Card>
+      </section>
+
+      <section id="regions" className="scroll-mt-6 flex flex-col gap-6">
+        {regionSeries.isPending ? <Loading label="Loading blendshapes…" /> : null}
+        {regionSeries.isError ? <ErrorState message={regionSeries.error.message} /> : null}
+        {regionSeries.data ? REGION_GROUPS.map(([group, names]) => {
+          const available = names.filter((n) => regionSeries.data.values[n]);
+          if (available.length === 0) return null;
+          const option: EChartsOption = {
+            tooltip: { trigger: "axis" },
+            legend: { top: 0, type: "scroll" },
+            grid: { left: 50, right: 20, top: 40, bottom: 40 },
+            xAxis: { type: "value", name: "time (s)" },
+            yAxis: { type: "value", min: 0, max: 1 },
+            series: available.map((n) => ({
+              name: n,
+              type: "line",
+              showSymbol: false,
+              data: regionSeries.data.values[n].map((v, i): [number | null, number | null] => [regionSeries.data.time_s[i], v]),
+            })),
+          };
+          return (
+            <Card key={group} title={`${group} movement over the complete recording`}>
+              <Chart option={option} label={`${group} blendshapes over time`} />
+            </Card>
+          );
+        }) : null}
       </section>
 
       <section id="head" className="scroll-mt-6">

@@ -228,3 +228,18 @@ class BlendshapeFrameTests(P2TestCase):
     def test_out_of_range_frame_is_not_found(self):
         with self.assertRaises(ApiError):
             face_data.blendshape_frame("demo_person", "session-001", 10**6)
+
+
+class BlendshapeSeriesTests(P2TestCase):
+    def test_series_follows_the_frames_and_reports_missing_names(self):
+        import json
+        path = pp.session_dataset_dir("demo_person", "session-001") / "facial_data.json"
+        records = json.loads(path.read_text(encoding="utf-8"))
+        name = next(iter(records[0].get("blendshapes", {})))
+        result = face_data.blendshape_series("demo_person", "session-001", [name, "notAShape"])
+        self.assertEqual(len(result["time_s"]), len(records))
+        self.assertEqual(result["missing"], ["notAShape"])
+        self.assertEqual(list(result["values"]), [name])
+        self.assertEqual(len(result["values"][name]), len(records))
+        with self.assertRaises(ApiError):
+            face_data.blendshape_series("demo_person", "session-001", [])

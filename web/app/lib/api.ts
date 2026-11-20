@@ -258,6 +258,12 @@ export type FrameBlendshapes = {
   values: [string, number][];
 };
 
+export type BlendshapeSeries = {
+  time_s: (number | null)[];
+  values: Record<string, (number | null)[]>;
+  missing: string[];
+};
+
 export type VideoFacts = {
   fps: number | null;
   frames: number;
@@ -320,6 +326,8 @@ export const api = {
   faceTopology: () => get<FaceTopology>("/face/topology"),
   faceBlendshapesFrame: (person: string, session: string, index: number) =>
     get<FrameBlendshapes>(`/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/blendshapes`),
+  faceBlendshapeSeries: (person: string, session: string, names: string[]) =>
+    get<BlendshapeSeries>(`/persons/${enc(person)}/sessions/${enc(session)}/face/blendshapes/series?names=${enc(names.join(","))}`),
   faceVideo: (person: string, session: string) =>
     get<VideoFacts>(`/persons/${enc(person)}/sessions/${enc(session)}/face/video`),
   faceOriginalUrl: (person: string, session: string, index: number) =>

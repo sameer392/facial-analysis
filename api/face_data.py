@@ -275,3 +275,25 @@ def blendshape_frame(person: str, session: str, index: int) -> dict:
         "face_detected": bool(record.get("face_detected", False)),
         "values": values,
     }
+
+
+def blendshape_series(person: str, session: str, names: list[str]) -> dict:
+    """Scores over the whole recording for the chosen blendshapes. Names the recording does not have are left out."""
+    _check_session(person, session)
+    if not names:
+        raise ApiError("invalid_request", "name at least one blendshape", 400)
+    if len(names) > 60:
+        raise ApiError("invalid_request", "at most 60 blendshapes at a time", 400)
+    frames = _face_frames(person, session)
+    present = set()
+    for record in frames:
+        present.update((record.get("blendshapes") or {}).keys())
+    chosen = [n for n in dict.fromkeys(names) if n in present]
+    values = {n: [] for n in chosen}
+    time_s = []
+    for record in frames:
+        time_s.append(_scalar(record.get("timestamp_ms", 0) / 1000.0))
+        blend = record.get("blendshapes") or {}
+        for n in chosen:
+            values[n].append(_scalar(blend.get(n)))
+    return {"time_s": time_s, "values": values, "missing": [n for n in dict.fromkeys(names) if n not in present]}
