@@ -229,3 +229,28 @@ def frame_image(person: str, session: str, index: int, mode: str, opacity: float
     if not ok:
         raise ApiError("encode_failed", "the image could not be encoded", 500)
     return buf.tobytes()
+
+
+def video_info(person: str, session: str) -> dict:
+    """Basic facts about the recording, read from the file (as the Streamlit page shows them)."""
+    import cv2
+
+    _check_session(person, session)
+    video = pp.session_video(person, session)
+    if not video.is_file():
+        raise ApiError("no_video", "the recording for this session is missing", 404)
+    cap = cv2.VideoCapture(str(video))
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    finally:
+        cap.release()
+    return {
+        "fps": fps if fps > 0 else None,
+        "frames": frames,
+        "width": width,
+        "height": height,
+        "duration_s": (frames / fps) if fps > 0 else None,
+    }

@@ -190,3 +190,21 @@ class FaceOverlayImageTests(P2TestCase):
         with self.assertRaises(ApiError) as ctx:
             face_data.frame_image("demo_person", "session-001", 0, "sparkles", 0.8, 1, 2)
         self.assertEqual(ctx.exception.status, 400)
+
+
+class VideoInfoTests(P2TestCase):
+    def test_video_facts_come_from_the_file(self):
+        import cv2
+        import numpy as np
+        from api import face_data
+        video = pp.session_video("demo_person", "session-001")
+        video.parent.mkdir(parents=True, exist_ok=True)
+        writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 25.0, (64, 48))
+        for i in range(5):
+            writer.write(np.full((48, 64, 3), 40 + i, dtype=np.uint8))
+        writer.release()
+        info = face_data.video_info("demo_person", "session-001")
+        self.assertEqual((info["width"], info["height"]), (64, 48))
+        self.assertEqual(info["frames"], 5)
+        self.assertAlmostEqual(info["fps"], 25.0, places=1)
+        self.assertAlmostEqual(info["duration_s"], 0.2, places=2)

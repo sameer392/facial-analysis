@@ -275,3 +275,8 @@ def face_overlay(person: str, session: str, index: int, mode: str = "hybrid", op
 def face_original(person: str, session: str, index: int):
     data = face_data.frame_image(person, session, index, "off", 0.0, 1, 1)
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/face/video")
+def face_video(person: str, session: str):
+    return face_data.video_info(person, session)
