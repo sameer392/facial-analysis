@@ -24,3 +24,6 @@ logs/*
 # Local server logs (not project data)
 api.log
 *.log
+
+# Local API token (created on first start; never commit)
+config/api_token.txt

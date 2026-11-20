@@ -259,3 +259,25 @@ class RenameTests(ManageTestCase):
         from api.main import app
         status, _ = call(app, "POST", "/api/persons/demo_person/sessions/session-001/rename", {"to": "session-009"})
         self.assertEqual(status, 401)
+
+
+class TokenFileTests(unittest.TestCase):
+    def test_token_is_created_once_and_reused(self):
+        tmp = Path(tempfile.mkdtemp(prefix="token_"))
+        try:
+            path = tmp / "config" / "api_token.txt"
+            first = jobs.load_or_create_token(path)
+            self.assertEqual(jobs.load_or_create_token(path), first)
+            self.assertEqual(path.read_text(encoding="utf-8").strip(), first)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_empty_token_file_is_refused(self):
+        tmp = Path(tempfile.mkdtemp(prefix="token_"))
+        try:
+            path = tmp / "api_token.txt"
+            path.write_text("\n", encoding="utf-8")
+            with self.assertRaises(RuntimeError):
+                jobs.load_or_create_token(path)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)

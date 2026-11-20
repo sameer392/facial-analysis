@@ -5,7 +5,7 @@ Run locally (Windows PowerShell, from the project folder):
 
 Read routes (phases P0 to P3) only read. The job routes (phase P4) are the only writes: they start the existing
 pose data build command as a separate process, and require the API token in the X-Facial-Token header. The token is
-printed when the server starts (or set FACIAL_API_TOKEN). The server binds to 127.0.0.1 by design.
+kept in config/api_token.txt (created on first start; or set FACIAL_API_TOKEN). The server binds to 127.0.0.1 by design.
 """
 
 from contextlib import asynccontextmanager
@@ -23,7 +23,7 @@ async def lifespan(_app):
     interrupted = jobs.recover_interrupted()
     if interrupted:
         print(f"Marked {len(interrupted)} unfinished job(s) as interrupted.")
-    print(f"API token for mutating requests (X-Facial-Token): {jobs.service().token}")
+    print(f"API token file: {jobs.TOKEN_FILE} (enter this token once, on the Settings page)")
     yield
 
 

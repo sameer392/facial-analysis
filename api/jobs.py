@@ -340,7 +340,7 @@ def configure(store_path: Path, log_dir: Path, token: str | None = None,
     global _service
     store = JobStore(store_path)
     runner = JobRunner(store, log_dir, command_for=command_for)
-    _service = Service(store, runner, token or os.environ.get("FACIAL_API_TOKEN") or secrets.token_urlsafe(24))
+    _service = Service(store, runner, token or os.environ.get("FACIAL_API_TOKEN") or load_or_create_token())
     return _service
 
 
@@ -349,6 +349,31 @@ def service() -> Service:
     if _service is None:
         configure(ROOT / "logs" / "jobs.sqlite3", ROOT / "logs" / "jobs")
     return _service
+
+
+TOKEN_FILE = ROOT / "config" / "api_token.txt"
+
+
+def load_or_create_token(path: Path = TOKEN_FILE) -> str:
+    """The API token, kept in a local file so it stays the same across restarts. Created on first use."""
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        existing = ""
+    if existing:
+        return existing
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = secrets.token_urlsafe(32)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        stored = path.read_text(encoding="utf-8").strip()
+        if not stored:
+            raise RuntimeError(f"the API token file is empty: {path}. Delete it to create a new token.") from None
+        return stored
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(token + chr(10))
+    return token
 
 
 def token_ok(presented: str | None) -> bool:
