@@ -323,6 +323,8 @@ export const api = {
     get<LandmarkFrame>(
       `/persons/${enc(person)}/sessions/${enc(session)}/face/landmarks/${index}?compensated=${compensated}`,
     ),
+  compareAcross: (items: string[]) =>
+    get<Comparison>(`/comparison?items=${enc(items.join(","))}`),
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
   faceTopology: () => get<FaceTopology>("/face/topology"),

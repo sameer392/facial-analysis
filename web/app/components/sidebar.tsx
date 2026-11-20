@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Clapperboard, Hand, Home, ListChecks, Mic, ScrollText, Settings, ShieldCheck, Users } from "lucide-react";
+import { Activity, Clapperboard, GitCompare, Hand, Home, ListChecks, Mic, ScrollText, Settings, ShieldCheck, Users } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Home },
   { href: "/people", label: "People", icon: Users },
   { href: "/recordings", label: "Recordings", icon: Clapperboard },
+  { href: "/compare", label: "Compare", icon: GitCompare },
   { href: "/jobs", label: "Jobs", icon: ListChecks },
   { href: "/audio", label: "Audio", icon: Mic },
   { href: "/hands", label: "Hands", icon: Hand },
