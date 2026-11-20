@@ -367,6 +367,9 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
       <section id="regions" className="scroll-mt-6 flex flex-col gap-6">
         {regionSeries.isPending ? <Loading label="Loading blendshapes…" /> : null}
         {regionSeries.isError ? <ErrorState message={regionSeries.error.message} /> : null}
+        <p className="text-sm">
+          <a className="underline" href={api.faceBlendshapesCsvUrl(person, session)} download>Download all blendshape scores (CSV)</a>
+        </p>
         {regionSeries.data ? REGION_GROUPS.map(([group, names]) => {
           const available = names.filter((n) => regionSeries.data.values[n]);
           if (available.length === 0) return null;

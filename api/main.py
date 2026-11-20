@@ -11,7 +11,7 @@ kept in config/api_token.txt (created on first start; or set FACIAL_API_TOKEN). 
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, Request
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from api import catalog, face_data, job_events, jobs, manage, pose_data, system
@@ -285,6 +285,12 @@ def face_blendshape_series(person: str, session: str, names: str = ""):
 @app.get("/api/persons/{person}/sessions/{session}/face/frames/{index}/blendshapes")
 def face_blendshapes_frame(person: str, session: str, index: int):
     return face_data.blendshape_frame(person, session, index)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/face/blendshapes.csv")
+def face_blendshapes_csv(person: str, session: str):
+    path = face_data.blendshapes_csv_path(person, session)
+    return FileResponse(path, media_type="text/csv", filename=f"{session}-facial_blendshapes.csv")
 
 
 @app.get("/api/persons/{person}/sessions/{session}/face/video")

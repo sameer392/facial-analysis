@@ -63,6 +63,15 @@ def _check_session(person: str, session: str) -> Path:
     return facial
 
 
+def blendshapes_csv_path(person: str, session: str) -> Path:
+    """The per-frame blendshape CSV written by the analysis (the same file the Streamlit page offers)."""
+    _check_session(person, session)
+    path = pp.session_dataset_dir(person, session) / "facial_blendshapes.csv"
+    if not path.is_file():
+        raise ApiError("not_found", "the blendshape CSV for this session is missing", 404)
+    return path
+
+
 def _analysis(person: str, session: str):
     facial = _check_session(person, session)
     key = (person, session, facial.stat().st_mtime_ns)

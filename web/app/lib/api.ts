@@ -326,6 +326,8 @@ export const api = {
   faceTopology: () => get<FaceTopology>("/face/topology"),
   faceBlendshapesFrame: (person: string, session: string, index: number) =>
     get<FrameBlendshapes>(`/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/blendshapes`),
+  faceBlendshapesCsvUrl: (person: string, session: string) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/face/blendshapes.csv`,
   faceBlendshapeSeries: (person: string, session: string, names: string[]) =>
     get<BlendshapeSeries>(`/persons/${enc(person)}/sessions/${enc(session)}/face/blendshapes/series?names=${enc(names.join(","))}`),
   faceVideo: (person: string, session: string) =>

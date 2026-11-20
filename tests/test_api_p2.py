@@ -243,3 +243,10 @@ class BlendshapeSeriesTests(P2TestCase):
         self.assertEqual(len(result["values"][name]), len(records))
         with self.assertRaises(ApiError):
             face_data.blendshape_series("demo_person", "session-001", [])
+
+
+class BlendshapeCsvTests(P2TestCase):
+    def test_csv_path_points_at_the_dataset_file(self):
+        path = face_data.blendshapes_csv_path("demo_person", "session-001")
+        self.assertEqual(path.name, "facial_blendshapes.csv")
+        self.assertTrue(path.is_file())
