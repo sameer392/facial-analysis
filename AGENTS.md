@@ -224,6 +224,8 @@ Do not describe a phase as implemented when only some of its steps are.
 
 - Audio Analysis dashboard page: placeholder.
 - Body Motion dashboard page: read-only viewer of existing pose data sessions (the Body Motion page is now in `web/`; its support code is `src/viewer/pose_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
+- Hand motion (H1 to H7): implemented and tested with synthetic data. Landmarks, tracking, motion metrics, rule-based gestures, dataset validation, the API and the Hands page. Gesture thresholds are uncalibrated (no labelled ground truth exists yet). The Hand Landmarker licence is unverified.
+- Video playback and landmark overlays (H8.2 to H8.5): implemented. The native player, the video and HLW1 landmark-window routes (localhost-only, Host and Sec-Fetch-Site checks), the synchronised overlays and the eight-window cache. Browser CPU, memory and rendering performance have not been measured. The timing check is cached in memory only; a persistent cache is not implemented.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.
@@ -324,6 +326,7 @@ For any public deployment:
 - Configure trusted origins explicitly.
 - Validate the deployment separately. Do not assume the development configuration is production-safe.
 - Keep private recordings and datasets out of the deployed artefact.
+- The video and landmark-window routes (`/video`, `/landmarks/window`, `/video/timing`) serve personal biometric data. They accept only local requests (Host and Sec-Fetch-Site checks, `FACIAL_ALLOWED_HOSTS`). Do not expose them beyond localhost without a separate authentication and access review; localhost binding alone does not stop other software on the same machine.
 
 ## 11. Model Licensing and External Assets
 

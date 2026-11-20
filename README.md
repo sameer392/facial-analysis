@@ -36,6 +36,7 @@ training is not implemented yet.
 | Next.js migration, phase P5: Models (hash status against the registry, licence text as recorded), Logs (job worker output, project and home paths redacted) and Settings (names only, no token). Read-only, `api/system.py` | **Implemented, tested (11 tests), checked live: all three model hashes match, and rendered in headless Chrome** |
 | Next.js migration, phase P6: Audio and Hands pages show their status (`/api/layers`) and what is needed, until the extractors exist. No audio or hand data is shown | **Implemented as placeholders (tested; pages built)** |
 | Body Motion (Pose data Pose) dashboard page | **Implemented as a read-only viewer** of existing pose data sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
+| Native video playback with synchronised facial, pose and hand landmark overlays (H8.2 to H8.5) | **Implemented.** Checked manually in the browser for playback, seeking, speed, session switching and overlays. Browser CPU, memory and rendering performance not measured. Localhost only. See the Video playback section |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
@@ -258,6 +259,84 @@ motion, gesture and quality results.
 API, so the page shows status only. Validation reads the whole session and takes about a second on the test recording.
 Charts and filters load at most 5,000 rows. Browser verification of the Hands page is not yet done. No Audio, phoneme
 alignment, multimodal timeline, training or inference is included.
+
+## Video playback and landmark overlays (H8)
+
+The Hands page plays the original recording in the browser's own video element, and draws the extracted landmarks over
+it, synchronised with the frame on screen. Nothing is re-extracted during playback.
+
+**What is streamed.** The original `.mp4` from `recordings/raw/<person>/<session>.mp4`, served by
+`GET /api/persons/{person}/sessions/{session}/video` with HTTP Range support (partial responses are 206, with the correct
+`Content-Range`). The file is never copied, re-encoded or written. Responses carry `Cache-Control: no-store`.
+
+**Landmark windows (HLW1, version 1).** `GET /api/persons/{person}/sessions/{session}/landmarks/window?start=&count=`
+returns between 1 and 30 consecutive frames of all four landmark streams in one binary response:
+
+| Bytes | Content |
+|---|---|
+| 0 to 3 | magic `HLW1` |
+| 4 to 7 | `uint32` (little-endian) length N of the JSON header |
+| 8 to 8+N | UTF-8 JSON header: format, version, frame indexes, timestamps, per-frame face, pose and hand flags, hand status, and each stream's channels, shape, dtype, byte offset and byte count |
+| after the header | the stream arrays, `float32`, C order, little-endian; offsets are relative to the start of this data section |
+
+Stream shapes are `[frames, points, channels]`: face 478 points (x, y); body 33 points (x, y, visibility); left and right
+hands 21 points each (x, y). Coordinates are normalised image coordinates (x divided by the frame width, y by the frame
+height). Missing values are NaN. A stream that is not in the session is declared absent, with a reason, and is not drawn.
+The browser parser (`web/app/lib/hlw1.ts`) rejects any window whose magic, version, frame count, timestamps, shapes,
+byte counts, offsets or values do not match this layout. A rejected window is shown as an error; nothing is drawn from it.
+
+**Synchronisation.** Each presented video frame's media time (from `requestVideoFrameCallback`, or the video's
+`currentTime` where that is unavailable) is mapped to the last frame of the extracted timeline at or before it, with a
+tolerance of half a millisecond. The frame index is never calculated as `currentTime x fps`. The frame's landmarks come
+from the window cache. Playback is never paused to wait for landmark data.
+
+**Timing check.** `GET .../video/timing` decodes the recording and compares each frame's decoded time with the extracted
+timeline. It returns `synchronized` only if every frame was checked and every difference is within 2 ms. It returns
+`deviation` or `unavailable` otherwise. Landmark overlays stay off unless the status is `synchronized`; the video plays
+normally in every case. The check decodes the whole recording once per process, which takes about 3.7 s for a 1,273-frame
+recording; the result is cached in memory, keyed on the file's path, size and modification time. Recordings longer than
+12,000 frames are reported `unavailable`. The timing check is not persisted between runs.
+
+**Cache and prefetch.** The browser keeps at most eight windows of 30 frames (about 1.1 MB for the full set). The window
+containing the current frame is loaded, and the next and previous windows are prefetched when they exist. A window that
+starts past the last frame is not requested. Requests for the same window are shared. Network failures are retried
+twice; HTTP and format errors are not retried and are shown as an error. Clearing the cache (on session change or page
+exit) aborts requests in flight.
+
+**Overlays.** The overlay is one canvas, the same size as the video element's own box, so it cannot be stretched separately
+from the picture. It is drawn at the device pixel ratio. Each stream has a visibility control and a colour: face cyan,
+body teal, left hand light blue, right hand pink. Points that are missing or not finite are skipped, and no line is drawn
+to a missing point. Body points below visibility 0.5 are not drawn.
+
+**Security.** The API is bound to `127.0.0.1`. The video and landmark routes accept a request only when:
+
+- the `Host` header is `127.0.0.1:8000` or `localhost:8000`, or the names set in `FACIAL_ALLOWED_HOSTS` (comma separated).
+  `X-Forwarded-Host` is never read. The Next.js proxy sends the API's own address as `Host`, so proxied requests pass;
+- the `Sec-Fetch-Site` header is absent (non-browser clients) or `same-origin`. `same-site`, `cross-site` and `none` are refused.
+
+Names are validated before any file is opened. The recording path is resolved and must lie inside the recordings root,
+which refuses symlinks that point elsewhere. Error responses carry a code and a message, never a filesystem path. The
+startup log names the token's location in words only; the token itself is never logged. The routes are read-only.
+
+**Privacy limitations.** Localhost binding is a deployment restriction, not protection against other software on the same
+machine, which can reach the same port. Requests without a `Sec-Fetch-Site` header are accepted by design, so any local tool
+can read the recordings and landmarks. The API is not approved for public or shared-network deployment, and no
+authentication is added to the read routes.
+
+**Verified and not verified.**
+
+- Verified by automated tests: the guard (Host, Sec-Fetch-Site, forwarded headers), Range responses, path and symlink
+  refusal, the window format and limits, the timing states, and the read-only behaviour (31 video tests, all passing).
+- Verified against real data: a window served through the proxy matches the stored NumPy values; the timing check on two
+  real recordings reported `synchronized`.
+- Verified manually in the browser by the project owner: playback, pause, seeking, speed control, session switching, and
+  the overlays on frames.
+- Not measured: browser CPU, memory and rendering performance; first-landmark latency in the browser; behaviour on
+  recordings longer than the 1,273-frame test recording.
+- Not verified: variable-frame-rate recordings. The timing check decides each recording on its own evidence, so a
+  recording that fails it stays unsynchronised. The mapping was checked on constant-frame-rate recordings only.
+- Not implemented: a persistent timing-validation cache; a per-frame detection score in the API (so the page shows
+  detection status, not a score); frame numbers shown during playback.
 
 ## Dashboard
 
