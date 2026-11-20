@@ -28,7 +28,7 @@ training is not implemented yet.
 | Rollback of a run's pose data output when a face data file changes during processing | Implemented (CLI, exit code 4) |
 | Next.js migration, phase P0: read-only Python API (`api/`) for health, persons and sessions | **Implemented, tested with synthetic data.** Read-only; binds to 127.0.0.1 when run. The web app and later phases are planned ([docs/proposals/nextjs_migration.md](docs/proposals/nextjs_migration.md)) |
 | Next.js migration, phase P1: read-only web shell (`web/`) with Overview, People, sessions and Recordings | **Implemented, built and checked in a browser on local data.** Read-only. Run it with `npm ci` then `npm run dev` in `web/`, with the API on 127.0.0.1:8000 |
-| Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
+| Hand motion analysis (H1 to H6): landmarks, tracking, motion, rule-based gestures, validation, Hands page | **Implemented and tested with synthetic data. Not validated on labelled footage; gesture rules are uncalibrated. Browser check of the Hands page not yet done.** See the Hand motion section |
 | Face-to-pose migration command | **Not implemented** |
 | Next.js migration, phase P2: facial analysis, diagnostics and dataset comparison pages (`web/`) on read-only `/api` routes for face data. Charts use ECharts 6.1.0 | **Implemented, typechecked and built. Browser check on local data pending** |
 | Next.js migration, phase P3: 3D facial page and Body Motion page (`web/`) on read-only `/api` routes for head pose and pose data Pose data. Body overlay is drawn by the API from the stored video (same code as the Streamlit page) | **Implemented, typechecked, built, tested with synthetic data and checked on a real pose data session in headless Chrome.** 3D is a projection, not a rotatable model (see below) |
@@ -36,6 +36,7 @@ training is not implemented yet.
 | Next.js migration, phase P5: Models (hash status against the registry, licence text as recorded), Logs (job worker output, project and home paths redacted) and Settings (names only, no token). Read-only, `api/system.py` | **Implemented, tested (11 tests), checked live: all three model hashes match, and rendered in headless Chrome** |
 | Next.js migration, phase P6: Audio and Hands pages show their status (`/api/layers`) and what is needed, until the extractors exist. No audio or hand data is shown | **Implemented as placeholders (tested; pages built)** |
 | Body Motion (Pose data Pose) dashboard page | **Implemented as a read-only viewer** of existing pose data sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
+| Native video playback with synchronised facial, pose and hand landmark overlays (H8.2 to H8.5) | **Implemented.** Checked manually in the browser for playback, seeking, speed, session switching and overlays. Browser CPU, memory and rendering performance not measured. Localhost only. See the Video playback section |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
@@ -176,6 +177,166 @@ python src/extraction/build_pose_session.py <person> <session> [--regenerate] [-
 - Exit codes: `0` published; `1` processing failed; `2` refused before processing; `3` model missing or wrong; `4` a face data file changed (rollback attempted).
 
 Automated tests use synthetic data and a fake detector. Real-recording validation has not been done.
+
+## Hand motion analysis (implemented; not calibrated)
+
+Runs on a recording that already has pose data. Hand data are written into the same session folder, in the `hands/`
+stream, through the same atomic writer. Face and pose data are never rebuilt by it.
+
+**Requirements.** The same Python 3.11 environment as the rest of the project. The Hand Landmarker model file
+`models/mediapipe/hand_landmarker.task` must be present and match the SHA-256 in `src/extraction/model_registry.py`.
+The model is not included in the repository. Its licence is recorded as **UNVERIFIED** in the registry; this is
+recorded metadata, not clearance for commercial use or redistribution.
+
+**Workflow.** From the Hands page, or from the command line:
+
+```powershell
+python src/extraction/build_hand_pipeline.py <person> <session> [--regenerate]
+```
+
+This runs, in order: landmarks (`build_hand_session.py`, H1), tracking and motion (`analyse_hand_session.py`, H2),
+gesture classification (`classify_hand_gestures.py`, H3), and read-only validation (`validation`, H4). Each stage
+publishes its own complete state. A stage that fails stops the run. Existing hand outputs are kept unless
+`--regenerate` is given.
+
+**Landmarks (H1).** MediaPipe Hand Landmarker in VIDEO mode, up to two hands. 21 points per hand, normalised image
+coordinates, plus world coordinates (metres) where the model provides them. Each frame has a status per side:
+`valid`, `low_confidence` (handedness score below 0.7; kept but not tracked), `outside_frame` (some landmarks lie off
+the image; this is not an occlusion measure), `not_detected`, `unassigned` (a hand was found but its side was ambiguous),
+or `not_processed`. Left and right come from the model's label; a label used twice in one frame is not guessed.
+
+**Tracking (H2).** Per frame, each usable hand is linked to a track by its distance from the predicted centroid, measured
+in hand sizes, with a penalty when the label differs. Links are chosen by exhaustive minimum cost. Tracks record creation,
+interruption (first missing frame), reacquisition, and termination (after more than 5 missing frames, or end of recording).
+Uncertain links are flagged (`label_conflict`, `ambiguous_candidates`, `hands_close`), not hidden. There is no appearance
+model, so crossing hands can be linked to the wrong track; the flags say when that is possible, not that it happened.
+
+**Motion metrics (H2).** Units are image pixels (normalised x times width, y times height), velocity in pixels per second,
+acceleration in pixels per second squared, angles in degrees, openness as a ratio. Pixel measures are image-space, not
+physical distances, and pixel speed is not physical hand speed. No smoothing. Velocity is not computed across a gap in
+the track; a missing value is recorded as missing, never as zero.
+
+**Gesture rules (H3).** Each finger is `extended`, `curled` or `unknown` from its reach (tip distance from the wrist, in
+palm lengths) and joint angles. Classes: `open_palm`, `closed_fist`, `pointing`, `thumbs_up`, `peace`, `unknown`. A class
+needs every finger determinate. Left and right labels are not used, so mirrored input gives the same class. The
+thresholds were set from synthetic geometry and one template hand. They are **not calibrated on labelled footage**.
+A stable gesture event needs at least 5 supporting frames; up to 2 unknown or other-class frames are bridged inside one
+event; longer changes end it; a missing frame always ends it. The geometric margin is a rule distance, not a probability.
+
+**Validation (H4).** `python src/extraction/validate_hand_session.py <person> <session> [--json PATH]` checks the H1 to H3
+outputs against each other, the manifest checksums and the metadata (including the model hash). It reports errors
+(the data contradict each other) and warnings (consistent but questionable). It never repairs or rewrites files.
+Passing these checks means the files are consistent. It does **not** mean the landmarks or gesture labels are correct.
+
+**Annotations (evaluation only).** Manual gesture labels are kept apart from classifier output. Format and validation are
+in `src/analysis/hand_annotation.py`: one row per labelled interval, with the track or hand, frame range, gesture label
+(`open_palm`, `closed_fist`, `pointing`, `thumbs_up`, `peace`, `unknown`, `occluded`), visibility, certainty, annotator and
+annotation version. The `annotations/` folder is git-ignored. Evaluation (precision, recall, F1, confusion matrix, unknown
+rate, fully versus partly visible) is in `src/analysis/hand_evaluation.py`. No labelled data exists yet, so no accuracy
+figure is reported anywhere in this repository.
+
+**Dataset outputs** (inside `datasets/<person>/<session>/`):
+
+| File | Content |
+|---|---|
+| `hands/left_hand.npy`, `hands/right_hand.npy` | normalised landmarks, frames × 21 × 3 (float32) |
+| `hands/left_hand_world.npy`, `hands/right_hand_world.npy` | world landmarks in metres (NaN where not given) |
+| `hands/hand_status.csv`, `hands/handedness.csv` | per-frame status and detection flags |
+| `hands/tracks.csv` | track events: created, matched, reacquired, interrupted, terminated |
+| `hands/motion_metrics.csv` | one row per linked observation, with the metrics above |
+| `hands/gesture_observations.csv`, `hands/gesture_events.csv` | frame-level classes and stable events |
+| `quality/tracking_quality.json` | `hands` section: detection, tracking, motion and gesture summaries |
+| `manifest.json`, `metadata.json` | checksums, extractor and model provenance, configuration |
+
+**API and Hands page.** Job kind `hand_build` (token required to start or cancel). Read-only routes under
+`/api/persons/{person}/sessions/{session}/hands/`: `summary`, `landmarks` (at most 100 frames per page), `tracks`,
+`motion`, `gestures/observations`, `gestures/events` (at most 200 rows per page), `quality/{tracking|gestures}`,
+`validation`, and `frames/{index}/overlay.jpg`. The read routes have no token, as the other read routes do, so the API
+must stay bound to `127.0.0.1`. The Hands page at `/hands` runs the job, shows each stage, plays the frames, and shows the
+motion, gesture and quality results.
+
+**Known limitations.** Gesture accuracy is unknown and uncalibrated. The per-frame detection score is not exposed by the
+API, so the page shows status only. Validation reads the whole session and takes about a second on the test recording.
+Charts and filters load at most 5,000 rows. Browser verification of the Hands page is not yet done. No Audio, phoneme
+alignment, multimodal timeline, training or inference is included.
+
+## Video playback and landmark overlays (H8)
+
+The Hands page plays the original recording in the browser's own video element, and draws the extracted landmarks over
+it, synchronised with the frame on screen. Nothing is re-extracted during playback.
+
+**What is streamed.** The original `.mp4` from `recordings/raw/<person>/<session>.mp4`, served by
+`GET /api/persons/{person}/sessions/{session}/video` with HTTP Range support (partial responses are 206, with the correct
+`Content-Range`). The file is never copied, re-encoded or written. Responses carry `Cache-Control: no-store`.
+
+**Landmark windows (HLW1, version 1).** `GET /api/persons/{person}/sessions/{session}/landmarks/window?start=&count=`
+returns between 1 and 30 consecutive frames of all four landmark streams in one binary response:
+
+| Bytes | Content |
+|---|---|
+| 0 to 3 | magic `HLW1` |
+| 4 to 7 | `uint32` (little-endian) length N of the JSON header |
+| 8 to 8+N | UTF-8 JSON header: format, version, frame indexes, timestamps, per-frame face, pose and hand flags, hand status, and each stream's channels, shape, dtype, byte offset and byte count |
+| after the header | the stream arrays, `float32`, C order, little-endian; offsets are relative to the start of this data section |
+
+Stream shapes are `[frames, points, channels]`: face 478 points (x, y); body 33 points (x, y, visibility); left and right
+hands 21 points each (x, y). Coordinates are normalised image coordinates (x divided by the frame width, y by the frame
+height). Missing values are NaN. A stream that is not in the session is declared absent, with a reason, and is not drawn.
+The browser parser (`web/app/lib/hlw1.ts`) rejects any window whose magic, version, frame count, timestamps, shapes,
+byte counts, offsets or values do not match this layout. A rejected window is shown as an error; nothing is drawn from it.
+
+**Synchronisation.** Each presented video frame's media time (from `requestVideoFrameCallback`, or the video's
+`currentTime` where that is unavailable) is mapped to the last frame of the extracted timeline at or before it, with a
+tolerance of half a millisecond. The frame index is never calculated as `currentTime x fps`. The frame's landmarks come
+from the window cache. Playback is never paused to wait for landmark data.
+
+**Timing check.** `GET .../video/timing` decodes the recording and compares each frame's decoded time with the extracted
+timeline. It returns `synchronized` only if every frame was checked and every difference is within 2 ms. It returns
+`deviation` or `unavailable` otherwise. Landmark overlays stay off unless the status is `synchronized`; the video plays
+normally in every case. The check decodes the whole recording once per process, which takes about 3.7 s for a 1,273-frame
+recording; the result is cached in memory, keyed on the file's path, size and modification time. Recordings longer than
+12,000 frames are reported `unavailable`. The timing check is not persisted between runs.
+
+**Cache and prefetch.** The browser keeps at most eight windows of 30 frames (about 1.1 MB for the full set). The window
+containing the current frame is loaded, and the next and previous windows are prefetched when they exist. A window that
+starts past the last frame is not requested. Requests for the same window are shared. Network failures are retried
+twice; HTTP and format errors are not retried and are shown as an error. Clearing the cache (on session change or page
+exit) aborts requests in flight.
+
+**Overlays.** The overlay is one canvas, the same size as the video element's own box, so it cannot be stretched separately
+from the picture. It is drawn at the device pixel ratio. Each stream has a visibility control and a colour: face cyan,
+body teal, left hand light blue, right hand pink. Points that are missing or not finite are skipped, and no line is drawn
+to a missing point. Body points below visibility 0.5 are not drawn.
+
+**Security.** The API is bound to `127.0.0.1`. The video and landmark routes accept a request only when:
+
+- the `Host` header is `127.0.0.1:8000` or `localhost:8000`, or the names set in `FACIAL_ALLOWED_HOSTS` (comma separated).
+  `X-Forwarded-Host` is never read. The Next.js proxy sends the API's own address as `Host`, so proxied requests pass;
+- the `Sec-Fetch-Site` header is absent (non-browser clients) or `same-origin`. `same-site`, `cross-site` and `none` are refused.
+
+Names are validated before any file is opened. The recording path is resolved and must lie inside the recordings root,
+which refuses symlinks that point elsewhere. Error responses carry a code and a message, never a filesystem path. The
+startup log names the token's location in words only; the token itself is never logged. The routes are read-only.
+
+**Privacy limitations.** Localhost binding is a deployment restriction, not protection against other software on the same
+machine, which can reach the same port. Requests without a `Sec-Fetch-Site` header are accepted by design, so any local tool
+can read the recordings and landmarks. The API is not approved for public or shared-network deployment, and no
+authentication is added to the read routes.
+
+**Verified and not verified.**
+
+- Verified by automated tests: the guard (Host, Sec-Fetch-Site, forwarded headers), Range responses, path and symlink
+  refusal, the window format and limits, the timing states, and the read-only behaviour (31 video tests, all passing).
+- Verified against real data: a window served through the proxy matches the stored NumPy values; the timing check on two
+  real recordings reported `synchronized`.
+- Verified manually in the browser by the project owner: playback, pause, seeking, speed control, session switching, and
+  the overlays on frames.
+- Not measured: browser CPU, memory and rendering performance; first-landmark latency in the browser; behaviour on
+  recordings longer than the 1,273-frame test recording.
+- Not verified: variable-frame-rate recordings. The timing check decides each recording on its own evidence, so a
+  recording that fails it stays unsynchronised. The mapping was checked on constant-frame-rate recordings only.
+- Not implemented: a persistent timing-validation cache; a per-frame detection score in the API (so the page shows
+  detection status, not a score); frame numbers shown during playback.
 
 ## Dashboard
 

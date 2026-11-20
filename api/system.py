@@ -131,11 +131,14 @@ LAYERS = {
                   "datasets/<person>/<session>/, and aligns them to the video frame timestamps.",
     },
     "hand": {
-        "title": "Hand tracking",
-        "extractor": "src/extraction/hand_extractor.py",
-        "will_show": "Hand landmarks (21 per hand) aligned to each session's frames, from the Hand Landmarker model.",
-        "needed": "A hand extractor that writes hand landmarks and visibility into the hands folder of the pose data, plus the "
-                  "validation and viewer code that reads them. The Hand Landmarker model is registered and checked on the Models page.",
+        "title": "Hand motion analysis",
+        "extractor": "src/extraction/build_hand_pipeline.py",
+        "will_show": "Hand landmarks (21 per hand) with left and right labels, tracks and motion metrics, rule-based gesture "
+                     "events and dataset validation, for each session. The gesture rules are not calibrated on labelled "
+                     "footage, so their results are not accuracy figures.",
+        "needed": "A Next.js hand page (not built yet), and labelled gesture data before any threshold is calibrated "
+                  "(none exists yet). The Hand Landmarker licence is shown on the Models page as recorded; it is not cleared "
+                  "for commercial use.",
     },
 }
 

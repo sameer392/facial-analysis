@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from api import catalog, face_data, job_events, jobs, manage, pose_data, system
+from api import catalog, face_data, hand_data, job_events, jobs, manage, pose_data, system, video_data
 from api.catalog import ApiError
 
 
@@ -23,7 +23,7 @@ async def lifespan(_app):
     interrupted = jobs.recover_interrupted()
     if interrupted:
         print(f"Marked {len(interrupted)} unfinished job(s) as interrupted.")
-    print(f"API token file: {jobs.TOKEN_FILE} (enter this token once, on the Settings page)")
+    print(jobs.startup_status())
     yield
 
 
@@ -275,6 +275,74 @@ async def job_progress_events(job_id: str):
         raise ApiError("not_found", "job not found", 404)
     return StreamingResponse(job_events.event_stream(job_id), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+# ---- phase H8: native video playback (read-only, local requests only) ------------------------
+
+@app.get("/api/persons/{person}/sessions/{session}/video", dependencies=[Depends(video_data.local_only)])
+def session_video(person: str, session: str):
+    path = video_data.recording_path(person, session)
+    return FileResponse(path, media_type="video/mp4", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/landmarks/window", dependencies=[Depends(video_data.local_only)])
+def landmark_window(person: str, session: str, start: int = 0, count: int = video_data.WINDOW_DEFAULT):
+    data = video_data.build_window(person, session, start, count)
+    return Response(content=data, media_type=f"application/vnd.facial-analysis.landmark-window; version={video_data.FORMAT_VERSION}",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/video/timing", dependencies=[Depends(video_data.local_only)])
+def video_timing(person: str, session: str):
+    return video_data.timing_check(person, session)
+
+
+# ---- phase H5: hand motion data (read-only) -------------------------------------------------
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/summary")
+def hands_summary(person: str, session: str):
+    return hand_data.summary(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/landmarks")
+def hands_landmarks(person: str, session: str, side: str = "left", start: int = 0, limit: int = 50):
+    return hand_data.landmarks(person, session, side, start, limit)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/tracks")
+def hands_tracks(person: str, session: str, offset: int = 0, limit: int = 50):
+    return hand_data.tracks(person, session, offset, limit)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/motion")
+def hands_motion(person: str, session: str, offset: int = 0, limit: int = 50):
+    return hand_data.motion(person, session, offset, limit)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/gestures/observations")
+def hands_gesture_observations(person: str, session: str, offset: int = 0, limit: int = 50):
+    return hand_data.gesture_observations(person, session, offset, limit)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/gestures/events")
+def hands_gesture_events(person: str, session: str, offset: int = 0, limit: int = 50):
+    return hand_data.gesture_events(person, session, offset, limit)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/quality/{which}")
+def hands_quality(person: str, session: str, which: str):
+    return hand_data.quality(person, session, which)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/validation")
+def hands_validation(person: str, session: str):
+    return hand_data.validation(person, session)
+
+
+@app.get("/api/persons/{person}/sessions/{session}/hands/frames/{index}/overlay.jpg")
+def hands_overlay(person: str, session: str, index: int):
+    data = hand_data.overlay_jpeg(person, session, index)
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/face/topology")

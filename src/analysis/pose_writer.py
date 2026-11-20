@@ -33,6 +33,10 @@ import pandas as pd
 from pose_schema import (
     ARRAY_SPECS,
     BLENDSHAPE_NAMES,
+    HAND_STATUS_COLUMNS,
+    HAND_STATUS_FILE,
+    HAND_TABLE_HEADERS,
+    HAND_VARIABLE_LENGTH_TABLES,
     HANDEDNESS_COLUMNS,
     MANIFEST_FILE,
     METADATA_FILE,
@@ -42,6 +46,7 @@ from pose_schema import (
     session_layout,
     validate_arrays,
     validate_handedness_rows,
+    validate_hand_status_rows,
     validate_manifest,
     validate_metadata,
     validate_timeline_rows,
@@ -97,6 +102,7 @@ class PoseDataPayload:
     blendshapes:     DataFrame with BLENDSHAPE_COLUMNS, one row per frame
     quality:         JSON-serialisable dict for quality/tracking_quality.json
     metadata:        metadata dict; the writer adds the outputs section and manifest checksum
+    hand_status_rows: optional, one dict per frame with HAND_STATUS_COLUMNS (written when the hand stream ran)
     """
     arrays: dict
     timeline_rows: list
@@ -105,6 +111,8 @@ class PoseDataPayload:
     quality: dict
     metadata: dict
     extra: dict = field(default_factory=dict)
+    hand_status_rows: list | None = None
+    hand_tables: dict | None = None   # relative path -> list of row dicts, for the tables in HAND_TABLE_HEADERS
 
 
 
@@ -180,10 +188,12 @@ def _expected_arrays(payload: PoseDataPayload) -> list[str]:
 
 def _planned_paths(payload: PoseDataPayload) -> list[str]:
     """Every data file the operation will publish, excluding the two structural files."""
+    extra = [HAND_STATUS_FILE] if payload.hand_status_rows is not None else []
+    extra += list((payload.hand_tables or {}).keys())
     return _expected_arrays(payload) + [
         "facial/blendshapes.csv", TIMELINE_FILE, "hands/handedness.csv",
         "quality/tracking_quality.json",
-    ]
+    ] + extra
 
 
 # ---------------------------------------------------------------- validation before writing
@@ -213,6 +223,20 @@ def prevalidate(payload: PoseDataPayload) -> int:
         issues.append("blendshapes columns do not match the schema")
     if len(payload.blendshapes) != n:
         issues.append(f"blendshapes has {len(payload.blendshapes)} rows, expected {n}")
+    for rel, rows in (payload.hand_tables or {}).items():
+        if rel not in HAND_TABLE_HEADERS or rel == HAND_STATUS_FILE:
+            issues.append(f"{rel} is not a hand table the writer accepts")
+            continue
+        if rows and any(c not in rows[0] for c in HAND_TABLE_HEADERS[rel]):
+            issues.append(f"{rel} rows are missing columns")
+        if rel not in HAND_VARIABLE_LENGTH_TABLES and len(rows) != n:
+            issues.append(f"{rel} has {len(rows)} rows, expected {n}")
+    if payload.hand_status_rows is not None:
+        for col_row in payload.hand_status_rows[:1]:
+            missing = [c for c in HAND_STATUS_COLUMNS if c not in col_row]
+            if missing:
+                issues.append(f"hand status row missing columns {missing}")
+        issues += validate_hand_status_rows(payload.hand_status_rows, n, payload.arrays)
     if not isinstance(payload.quality, dict):
         issues.append("quality must be a dict")
     issues += validate_metadata(payload.metadata)
@@ -236,6 +260,11 @@ def _write_staging(staging: Path, payload: PoseDataPayload, fail_at: str | None)
         (TIMELINE_FILE, pd.DataFrame(payload.timeline_rows, columns=list(TIMELINE_COLUMNS)).to_csv(index=False)),
         ("hands/handedness.csv", pd.DataFrame(payload.handedness_rows, columns=list(HANDEDNESS_COLUMNS)).to_csv(index=False)),
     ]
+    if payload.hand_status_rows is not None:
+        csv_jobs.append((HAND_STATUS_FILE,
+                         pd.DataFrame(payload.hand_status_rows, columns=list(HAND_STATUS_COLUMNS)).to_csv(index=False)))
+    for rel, rows in (payload.hand_tables or {}).items():
+        csv_jobs.append((rel, pd.DataFrame(rows, columns=list(HAND_TABLE_HEADERS[rel])).to_csv(index=False)))
     for i, (rel, text) in enumerate(csv_jobs):
         _write_text_atomic(_rel_to_path(rel, staging), text)
         written.append(rel)
@@ -268,11 +297,13 @@ def _validate_staged(staging: Path, payload: PoseDataPayload, written: list[str]
                 "facial/blendshapes.csv": list(BLENDSHAPE_COLUMNS),
                 TIMELINE_FILE: list(TIMELINE_COLUMNS),
                 "hands/handedness.csv": list(HANDEDNESS_COLUMNS),
+                HAND_STATUS_FILE: list(HAND_STATUS_COLUMNS),
+                **{k: list(v) for k, v in HAND_TABLE_HEADERS.items()},
             }[rel]
             if header != expected:
                 issues.append(f"{rel} header does not match the schema")
             rows = len(pd.read_csv(path))
-            if rows != n:
+            if rel not in HAND_VARIABLE_LENGTH_TABLES and rows != n:
                 issues.append(f"{rel} has {rows} rows, expected {n}")
         elif rel.endswith(".json"):
             try:

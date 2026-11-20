@@ -14,6 +14,7 @@ const OFFERED: JobKind[] = ["face_build", "pose_build"];
 const KIND_LABEL: Record<JobKind, string> = {
   face_build: "Face data",
   pose_build: "Pose data",
+  hand_build: "Hand motion",
   face_extract: "Face extraction (older job)",
   face_analyse: "Face analysis outputs (older job)",
 };
@@ -21,6 +22,7 @@ const KIND_LABEL: Record<JobKind, string> = {
 const KIND_HELP: Record<JobKind, string> = {
   face_build: "Reads the recording and writes the face data: landmarks, blendshapes and motion measures. Never overwrites existing face data. Progress is per frame, then per stage.",
   pose_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
+  hand_build: "Runs hand landmarks, tracking, gestures and validation on the Hands page. Needs pose data first.",
   face_extract: "Reads the recording and writes the face data and frames. Never overwrites existing data. Progress is per frame.",
   face_analyse: "Writes the blendshape table and motion outputs from existing face data. Replacing needs the box ticked.",
 };
