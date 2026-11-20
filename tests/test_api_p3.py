@@ -14,7 +14,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
-sys.path.insert(0, str(ROOT / "src" / "dashboard"))
+sys.path.insert(0, str(ROOT / "src" / "viewer"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import project_paths as pp  # noqa: E402

@@ -17,7 +17,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 ANALYSIS_DIR = ROOT / "src" / "analysis"
-DASHBOARD_DIR = ROOT / "src" / "dashboard"
+VIEWER_DIR = ROOT / "src" / "viewer"
 sys.path.insert(0, str(ANALYSIS_DIR))
 
 import facial_analyzer as fa  # noqa: E402
@@ -218,7 +218,7 @@ class ProcessedDatasetTests(unittest.TestCase):
 
 class ScriptCompileTests(unittest.TestCase):
     def test_all_python_sources_compile(self):
-        for path in list(ANALYSIS_DIR.glob("*.py")) + list(DASHBOARD_DIR.rglob("*.py")):
+        for path in list(ANALYSIS_DIR.glob("*.py")) + list(VIEWER_DIR.rglob("*.py")):
             with self.subTest(file=path.name):
                 py_compile.compile(str(path), doraise=True)
 

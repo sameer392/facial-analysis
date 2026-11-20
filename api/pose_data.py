@@ -1,6 +1,6 @@
 """Read-only pose data and face data head-pose data for the web pages (phase P3).
 
-Numbers come from src/dashboard/pose_viewer.py and src/analysis/facial_3d_analyzer.py, the same code the
+Numbers come from src/viewer/pose_viewer.py and src/analysis/facial_3d_analyzer.py, the same code the
 Streamlit pages use. NaN and infinity become null. Validation results are cached per session, keyed on
 the modification time of metadata.json, so a regenerated session is checked again. Nothing is written.
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 _ROOT = Path(__file__).resolve().parents[1]
-for _p in (_ROOT / "src" / "analysis", _ROOT / "src" / "dashboard"):
+for _p in (_ROOT / "src" / "analysis", _ROOT / "src" / "viewer"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

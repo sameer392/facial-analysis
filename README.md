@@ -73,7 +73,7 @@ facial-analysis/
 │   │   ├── file_safety.py         overwrite checks and atomic writes
 │   │   ├── project_paths.py       folder layout and name rules
 │   │   └── demo_data.py           synthetic demo recordings and datasets
-│   ├── dashboard/         overlay.py and pose_viewer.py (used by the API; no web framework)
+│   ├── viewer/            overlay.py and pose_viewer.py (used by the API; no web framework)
 │   ├── extraction/        reserved for audio and body extractors (empty)
 │   ├── inference/         reserved for generation (empty)
 │   └── training/          reserved for model training (empty)

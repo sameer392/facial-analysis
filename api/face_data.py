@@ -15,9 +15,9 @@ import numpy as np
 _ANALYSIS = Path(__file__).resolve().parents[1] / "src" / "analysis"
 if str(_ANALYSIS) not in sys.path:
     sys.path.insert(0, str(_ANALYSIS))
-_DASHBOARD = Path(__file__).resolve().parents[1] / "src" / "dashboard"
-if str(_DASHBOARD) not in sys.path:
-    sys.path.insert(0, str(_DASHBOARD))
+_VIEWER = Path(__file__).resolve().parents[1] / "src" / "viewer"
+if str(_VIEWER) not in sys.path:
+    sys.path.insert(0, str(_VIEWER))
 
 import facial_analyzer as fa  # noqa: E402
 import project_paths as pp  # noqa: E402

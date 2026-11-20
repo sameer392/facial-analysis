@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Removed
 - Streamlit dashboard (phase P7, approved in writing). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. Streamlit and Plotly are removed from `requirements.txt`. The Next.js dashboard with the Python API replaces it.
+- `src/dashboard/` renamed to `src/viewer/`: `overlay.py` and `pose_viewer.py` are the framework-free helpers the API uses.
 
 ### Added
 - Compare people page (`/compare`): compare sessions from several people. `GET /api/comparison?items=person/session,...`.

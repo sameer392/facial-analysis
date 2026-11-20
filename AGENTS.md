@@ -218,12 +218,12 @@ Do not describe a phase as implemented when only some of its steps are.
 - **Rename (person and recording): implemented.** `POST /api/persons/{p}/rename` and `POST /api/persons/{p}/sessions/{s}/rename` with body `{"to": "new-name"}`. Token required. Refused while processed data exists (it records the names), while a job runs, or when the new name is taken. Tests: `tests/test_api_manage.py`.
 - **Naming migration, step 5: done.** API paths are `/face/…` (face data) and `/pose/…` (pose data). Job codes are `face_build` and `pose_build`; rows saved with the older pose code are updated when the job store opens. Modules are `pose_schema`, `pose_writer`, `pose_viewer`, `pose_builder`, `build_pose_session.py`, `face_data.py` and `pose_data.py`. Pose data lock and temporary names are `.pose-lock`, `.pose-staging-*` and `.pose-previous-*`. Session rows include `layout_name`. Tests: `tests/test_naming_migration.py`. Plan: `docs/proposals/naming_migration.md`.
 - CI (`.github/workflows/tests.yml`) runs on pushes to `main` and `migration-nextjs`, and on pull requests.
-- **Phase P7, Streamlit removed: done** (written sign-off given). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. `src/dashboard/overlay.py` and `pose_viewer.py` remain because the API uses them. Streamlit and Plotly are removed from `requirements.txt`.
+- **Phase P7, Streamlit removed: done** (written sign-off given). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. `src/viewer/overlay.py` and `pose_viewer.py` remain because the API uses them. They moved from `src/dashboard/` to `src/viewer/` (the folder is now named for what it holds). Streamlit and Plotly are removed from `requirements.txt`.
 
 ### Other status
 
 - Audio Analysis dashboard page: placeholder.
-- Body Motion dashboard page: read-only viewer of existing pose data sessions (`src/dashboard/pages/04_Body_Motion.py`, support code `src/dashboard/pose_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
+- Body Motion dashboard page: read-only viewer of existing pose data sessions (the Body Motion page is now in `web/`; its support code is `src/viewer/pose_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.

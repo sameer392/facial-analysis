@@ -1,4 +1,4 @@
-"""Facial landmark overlay rendering for the dashboard.
+"""Facial landmark overlay rendering for the API and the web dashboard.
 
 Modes:
     off        no overlay

@@ -58,7 +58,7 @@ for this repository; treat it as unknown until you have checked the official pag
 
 ## MediaPipe face connection topology (used by the dashboard overlay)
 
-`src/dashboard/overlay.py` reads the edge lists from MediaPipe's `FaceLandmarksConnections`
+`src/viewer/overlay.py` reads the edge lists from MediaPipe's `FaceLandmarksConnections`
 (in the `mediapipe` Python package, Apache-2.0). These are index pairs, not model weights. The
 model file is a separate asset with its own status (see the Face Landmarker section above).
 
