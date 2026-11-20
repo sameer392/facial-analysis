@@ -15,6 +15,9 @@ import numpy as np
 _ANALYSIS = Path(__file__).resolve().parents[1] / "src" / "analysis"
 if str(_ANALYSIS) not in sys.path:
     sys.path.insert(0, str(_ANALYSIS))
+_DASHBOARD = Path(__file__).resolve().parents[1] / "src" / "dashboard"
+if str(_DASHBOARD) not in sys.path:
+    sys.path.insert(0, str(_DASHBOARD))
 
 import facial_analyzer as fa  # noqa: E402
 import project_paths as pp  # noqa: E402
@@ -178,3 +181,51 @@ def topology() -> dict:
             for name, colour in overlay.REGION_COLOURS.items()
         }
     return {"mesh": _topology_cache["mesh"], "regions": _topology_cache["regions"]}
+
+
+_frames_cache: dict = {}
+
+
+def _face_frames(person: str, session: str) -> list[dict]:
+    """The per-frame records from facial_data.json, read once per file change (as the Streamlit page does)."""
+    import json
+
+    path = pp.session_dataset_dir(person, session) / "facial_data.json"
+    key = (str(path), path.stat().st_mtime_ns)
+    if key not in _frames_cache:
+        _frames_cache.clear()
+        _frames_cache[key] = json.loads(path.read_text(encoding="utf-8"))
+    return _frames_cache[key]
+
+
+def frame_image(person: str, session: str, index: int, mode: str, opacity: float,
+                thickness: int, point_radius: int) -> bytes:
+    """One video frame as JPEG, with the chosen landmark overlay (mode 'off' gives the original frame)."""
+    import cv2
+    import overlay
+
+    _check_session(person, session)
+    frames = _face_frames(person, session)
+    if not (0 <= index < len(frames)):
+        raise ApiError("not_found", "frame index out of range", 404)
+    if mode not in overlay.MODES:
+        raise ApiError("invalid_request", f"mode must be one of {', '.join(overlay.MODES)}", 400)
+    if not (0.0 <= opacity <= 1.0) or not (1 <= thickness <= 3) or not (1 <= point_radius <= 5):
+        raise ApiError("invalid_request", "opacity 0 to 1, thickness 1 to 3, point size 1 to 5", 400)
+    video = pp.session_video(person, session)
+    if not video.is_file():
+        raise ApiError("no_video", "the recording for this session is missing", 404)
+    cap = cv2.VideoCapture(str(video))
+    try:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(index))
+        ok, frame = cap.read()
+    finally:
+        cap.release()
+    if not ok:
+        raise ApiError("not_found", "the video frame could not be read", 404)
+    drawn = overlay.render_overlay(frame, frames[index], mode=mode, opacity=opacity,
+                                   thickness=thickness, point_radius=point_radius)
+    ok, buf = cv2.imencode(".jpg", drawn, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    if not ok:
+        raise ApiError("encode_failed", "the image could not be encoded", 500)
+    return buf.tobytes()

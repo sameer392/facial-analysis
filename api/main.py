@@ -262,3 +262,16 @@ async def job_progress_events(job_id: str):
 @app.get("/api/face/topology")
 def face_topology():
     return face_data.topology()
+
+
+@app.get("/api/persons/{person}/sessions/{session}/face/frames/{index}/overlay.jpg")
+def face_overlay(person: str, session: str, index: int, mode: str = "hybrid", opacity: float = 0.8,
+                 thickness: int = 1, point_radius: int = 2):
+    data = face_data.frame_image(person, session, index, mode, opacity, thickness, point_radius)
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/face/frames/{index}/original.jpg")
+def face_original(person: str, session: str, index: int):
+    data = face_data.frame_image(person, session, index, "off", 0.0, 1, 1)
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})

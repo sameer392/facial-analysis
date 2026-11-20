@@ -169,3 +169,24 @@ class TopologyTests(unittest.TestCase):
             self.assertRegex(region["colour"], r"^#[0-9a-f]{6}$")
             for a, b in region["edges"]:
                 self.assertTrue(0 <= a < 478 and 0 <= b < 478)
+
+
+class FaceOverlayImageTests(P2TestCase):
+    def test_overlay_and_original_frames_are_jpegs_of_the_video_size(self):
+        import cv2
+        import numpy as np
+        from api import face_data
+        video = pp.session_video("demo_person", "session-001")
+        video.parent.mkdir(parents=True, exist_ok=True)
+        writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"mp4v"), 25.0, (64, 48))
+        for i in range(3):
+            writer.write(np.full((48, 64, 3), 60 + 20 * i, dtype=np.uint8))
+        writer.release()
+        original = face_data.frame_image("demo_person", "session-001", 0, "off", 0.0, 1, 1)
+        overlaid = face_data.frame_image("demo_person", "session-001", 0, "hybrid", 0.8, 1, 2)
+        for data in (original, overlaid):
+            image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            self.assertEqual(image.shape[:2], (48, 64))
+        with self.assertRaises(ApiError) as ctx:
+            face_data.frame_image("demo_person", "session-001", 0, "sparkles", 0.8, 1, 2)
+        self.assertEqual(ctx.exception.status, 400)
