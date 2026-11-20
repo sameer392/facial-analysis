@@ -3,9 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ACTIVE_JOB_STATES, ApiFailure, api, type Job, type JobKind, type JobState } from "../lib/api";
+import { useApiToken } from "../lib/token";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 
-const TOKEN_KEY = "facial.apiToken";
 
 // Jobs offered on this page. Older single-step jobs still show their names in the job list.
 const OFFERED: JobKind[] = ["face_build", "pose_build"];
@@ -37,29 +37,6 @@ function stateTone(state: JobState): "neutral" | "good" | "warn" {
   if (state === "succeeded") return "good";
   if (state === "failed" || state === "interrupted") return "warn";
   return "neutral";
-}
-
-/** The token is kept for this browser tab only. It is never put in the URL. */
-function useApiToken(): [string, (value: string) => void, boolean] {
-  const [token, setToken] = useState("");
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => {
-    try {
-      setToken(window.sessionStorage.getItem(TOKEN_KEY) ?? "");
-    } catch {
-      // storage unavailable (private window or blocked): the token must be typed each time
-    }
-    setLoaded(true);
-  }, []);
-  const save = (value: string) => {
-    setToken(value);
-    try {
-      window.sessionStorage.setItem(TOKEN_KEY, value);
-    } catch {
-      // ignore: the token stays in memory for this page only
-    }
-  };
-  return [token, save, loaded];
 }
 
 function errorText(error: unknown): { message: string; code?: string } {

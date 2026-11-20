@@ -222,6 +222,35 @@ export type Settings = {
 
 const enc = encodeURIComponent;
 
+/** Sends a request with a JSON body and the API token, and reads the same error shape as the rest of the client. */
+async function send<T>(method: "POST" | "PUT", path: string, token: string, body?: unknown, raw?: Blob): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", "X-Facial-Token": token };
+  let payload: BodyInit | undefined;
+  if (raw) {
+    headers["Content-Type"] = "video/mp4";
+    payload = raw;
+  } else if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+  const response = await fetch(`/api${path}`, { method, headers, body: payload });
+  if (!response.ok) {
+    let code = "http_error";
+    let message = `Request failed (${response.status})`;
+    try {
+      const data = (await response.json()) as { code?: string; message?: string };
+      code = data.code ?? code;
+      message = data.message ?? message;
+    } catch {
+      // not JSON: keep the generic message
+    }
+    throw new ApiFailure(response.status, code, message);
+  }
+  return (await response.json()) as T;
+}
+
+export type DeleteResult = { deleted: boolean };
+
 export const api = {
   health: () => get<Health>("/health"),
   persons: () => get<string[]>("/persons"),
@@ -260,4 +289,18 @@ export const api = {
   cancelJob: (token: string, id: string) => request<Job>("POST", `/jobs/${enc(id)}/cancel`, { token }),
   poseOverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/pose/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
+  createPerson: (token: string, name: string) =>
+    send<{ person: string; created: boolean }>("POST", "/persons", token, { name }),
+  deletePerson: (token: string, person: string, confirm: string) =>
+    send<DeleteResult>("POST", `/persons/${enc(person)}/delete`, token, { confirm }),
+  deleteDataset: (token: string, person: string, session: string, confirm: string) =>
+    send<DeleteResult>("POST", `/persons/${enc(person)}/sessions/${enc(session)}/dataset/delete`, token, { confirm }),
+  deleteVideo: (token: string, person: string, session: string, confirm: string) =>
+    send<DeleteResult>("POST", `/persons/${enc(person)}/sessions/${enc(session)}/video/delete`, token, { confirm }),
+  uploadVideo: (token: string, person: string, session: string, file: Blob) =>
+    send<{ person: string; session: string; bytes: number; uploaded: boolean }>(
+      "PUT", `/persons/${enc(person)}/sessions/${enc(session)}/video`, token, undefined, file,
+    ),
+  clearJobHistory: (token: string, confirm: string) =>
+    send<{ removed: number }>("POST", "/jobs/history/clear", token, { confirm }),
 };

@@ -124,12 +124,12 @@ class ReadOnlyTests(P0TestCase):
     def test_every_route_is_read_only(self):
         from api.main import app
 
-        # only the job routes (phase P4) may write; every other API route is read-only
-        writes = set()
+        # every route that writes must require the API token; reads need no token
+        from api.main import require_token
         for route in app.routes:
-            if route.path.startswith("/api") and not route.path.startswith("/api/jobs"):
-                writes |= set(getattr(route, "methods", set())) - {"GET", "HEAD"}
-        self.assertEqual(writes, set())
+            if route.path.startswith("/api") and set(getattr(route, "methods", set())) - {"GET", "HEAD"}:
+                calls = [d.call for d in route.dependant.dependencies]
+                self.assertIn(require_token, calls, route.path)
 
     def test_health_does_not_reveal_absolute_paths(self):
         body = json.dumps(catalog.health())

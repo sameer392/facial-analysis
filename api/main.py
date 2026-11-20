@@ -10,11 +10,11 @@ printed when the server starts (or set FACIAL_API_TOKEN). The server binds to 12
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header
+from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from api import catalog, jobs, system, face_data, pose_data
+from api import catalog, face_data, jobs, manage, pose_data, system
 from api.catalog import ApiError
 
 
@@ -187,3 +187,51 @@ def settings():
 def layers():
     return system.layers()
 
+
+
+# ---- management: people, recordings, datasets and job history (token and typed confirmation) ----
+
+class PersonRequest(BaseModel):
+    name: str
+
+
+class ConfirmRequest(BaseModel):
+    confirm: str | None = None
+
+
+@app.post("/api/persons", status_code=201, dependencies=[Depends(require_token)])
+def create_person(body: PersonRequest):
+    return manage.create_person(body.name)
+
+
+@app.post("/api/persons/{person}/delete", dependencies=[Depends(require_token)])
+def delete_person(person: str, body: ConfirmRequest):
+    return manage.delete_person(person, body.confirm)
+
+
+@app.post("/api/persons/{person}/sessions/{session}/dataset/delete", dependencies=[Depends(require_token)])
+def delete_dataset(person: str, session: str, body: ConfirmRequest):
+    return manage.delete_dataset(person, session, body.confirm)
+
+
+@app.post("/api/persons/{person}/sessions/{session}/video/delete", dependencies=[Depends(require_token)])
+def delete_video(person: str, session: str, body: ConfirmRequest):
+    return manage.delete_video(person, session, body.confirm)
+
+
+@app.put("/api/persons/{person}/sessions/{session}/video", status_code=201, dependencies=[Depends(require_token)])
+async def upload_video(person: str, session: str, request: Request):
+    """Upload one MP4 as the raw body (Content-Type video/mp4). Refused if the session already has a video."""
+    writer = manage.UploadWriter(person, session)
+    try:
+        async for chunk in request.stream():
+            writer.write(chunk)
+        return writer.finish()
+    except BaseException:
+        writer.abort()
+        raise
+
+
+@app.post("/api/jobs/history/clear", dependencies=[Depends(require_token)])
+def clear_job_history(body: ConfirmRequest):
+    return manage.clear_job_history(body.confirm)

@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- Manage page: create people, upload MP4 recordings, delete recording data, videos or whole people with typed confirmation, and clear finished job history. Every action needs the API token.
 - Face data is one job: extraction and analysis run together (`face_build`, `src/analysis/build_face_data.py`). The Jobs page offers Face data and Pose data. The separate extraction and analysis job kinds remain in the API.
 - Naming cleanup: layout codes are `face`, `pose` and `pose_incomplete`; `--regenerate-v2` is `--regenerate`; the write, rollback and recovery functions, the constants and the exception names use face and pose names. The stored schema string `2.0` is unchanged.
 - Naming migration, step 5: the older API paths (`/v1/…`, `/v2/…`), job codes, `.v2-` lock and temporary names, and the old class and module names are removed. Job rows saved with the older codes are updated when the job store opens.

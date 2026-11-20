@@ -158,6 +158,27 @@ class JobStore:
                          (*fields.values(), _now(), job_id))
 
 
+def _active_for_session(self, person: str, session: str) -> list[dict]:
+    with self._connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE person = ? AND session = ? AND state IN ('queued', 'running')",
+            (person, session),
+        ).fetchall()
+    return [_row(r) for r in rows]
+
+
+def _delete_finished(self) -> list[str]:
+    """Remove job records that are no longer active. Returns their ids. Active jobs are never removed."""
+    with self._connect() as conn:
+        rows = conn.execute("SELECT id FROM jobs WHERE state NOT IN ('queued', 'running')").fetchall()
+        ids = [r["id"] for r in rows]
+        conn.execute("DELETE FROM jobs WHERE state NOT IN ('queued', 'running')")
+    return ids
+
+
+JobStore.active_for_session = _active_for_session
+JobStore.delete_finished = _delete_finished
+
 def _row(row) -> dict:
     d = dict(row)
     d["regenerate"] = bool(d["regenerate"])

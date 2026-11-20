@@ -145,11 +145,12 @@ class HttpP2Tests(P2TestCase):
         status, body = call(app, "GET", "/api/persons/demo_person/sessions/session-009/face/summary")
         self.assertEqual(status, 404)
         # only the job routes (phase P4) may write; every other API route is read-only
-        writes = set()
+        # every route that writes must require the API token; reads need no token
+        from api.main import require_token
         for route in app.routes:
-            if route.path.startswith("/api") and not route.path.startswith("/api/jobs"):
-                writes |= set(getattr(route, "methods", set())) - {"GET", "HEAD"}
-        self.assertEqual(writes, set())
+            if route.path.startswith("/api") and set(getattr(route, "methods", set())) - {"GET", "HEAD"}:
+                calls = [d.call for d in route.dependant.dependencies]
+                self.assertIn(require_token, calls, route.path)
 
 
 if __name__ == "__main__":
