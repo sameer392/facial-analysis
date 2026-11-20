@@ -197,7 +197,8 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
         series.push(edgeLines(region.edges, region.colour, 0.9, 1.5));
       }
     }
-    if (mode === "points" || mode === "hybrid") {
+    const showPoints = mode === "points" || mode === "hybrid";
+    if (showPoints) {
       series.push({
         type: "scatter",
         symbolSize: 3,
@@ -210,8 +211,10 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
       grid: { left: 20, right: 80, top: 20, bottom: 20 },
       xAxis: { type: "value", show: false, min: -bound, max: bound },
       yAxis: { type: "value", show: false, min: -bound, max: bound },
-      visualMap: {
-        show: mode === "points" || mode === "hybrid",
+      // The depth colour scale is only for the points. Without points it is left out, so the lines keep their colour.
+      visualMap: showPoints ? {
+        show: true,
+        seriesIndex: series.length - 1,
         dimension: 2,
         min: Math.min(...depths),
         max: Math.max(...depths),
@@ -221,7 +224,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
         text: ["near", "far"],
         calculable: false,
         inRange: { color: ["#1d4ed8", "#a3a3a3", "#dc2626"] },
-      },
+      } : undefined,
       series,
     };
   }, [landmarks.data, yaw, pitch, roll, zoom, mode, topology.data]);
