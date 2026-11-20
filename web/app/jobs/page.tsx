@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ACTIVE_JOB_STATES, ApiFailure, api, type Job, type JobKind, type JobState } from "../lib/api";
 import { useApiToken } from "../lib/token";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
+import { ConfirmDialog } from "../components/manage-ui";
 
 
 // Jobs offered on this page. Older single-step jobs still show their names in the job list.
@@ -84,6 +85,15 @@ export default function JobsPage() {
   const cancel = useMutation({
     mutationFn: (id: string) => api.cancelJob(token, id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
+
+  const [clearing, setClearing] = useState(false);
+  const clearHistory = useMutation({
+    mutationFn: (t: string) => api.clearJobHistory(t, "clear job history"),
+    onSuccess: () => {
+      setClearing(false);
       queryClient.invalidateQueries({ queryKey: ["jobs"] });
     },
   });
@@ -205,9 +215,26 @@ export default function JobsPage() {
         {jobs.data && jobs.data.length === 0 ? (
           <Empty title="No jobs yet" detail="Jobs you start appear here." />
         ) : null}
+        <div className="mb-3 flex justify-end">
+          <button type="button" onClick={() => setClearing(true)} disabled={!jobs.data?.some((j) => !ACTIVE_JOB_STATES.includes(j.state))}
+            className="rounded border border-[var(--border)] px-2 py-1 text-xs disabled:opacity-40">Clear finished jobs</button>
+        </div>
         {cancel.isError ? <div className="mb-3"><ErrorState {...errorText(cancel.error)} /></div> : null}
         {jobs.data && jobs.data.length > 0 ? <JobTable jobs={jobs.data} token={token} onCancel={(id) => cancel.mutate(id)} cancelling={cancel.isPending} /> : null}
       </Card>
+      {clearing ? (
+        <ConfirmDialog
+          title="Clear finished jobs?"
+          expected="clear job history"
+          actionLabel="Clear finished jobs"
+          pending={clearHistory.isPending}
+          error={clearHistory.isError ? clearHistory.error : undefined}
+          onClose={() => { setClearing(false); clearHistory.reset(); }}
+          onConfirm={(t) => clearHistory.mutate(t)}
+        >
+          <p>Removes finished job records and their logs. Jobs that are still running are kept.</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }

@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Clapperboard, Hand, Home, ListChecks, Mic, ScrollText, Settings, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
+import { Activity, Clapperboard, Hand, Home, ListChecks, Mic, ScrollText, Settings, ShieldCheck, Users } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Overview", icon: Home },
   { href: "/people", label: "People", icon: Users },
   { href: "/recordings", label: "Recordings", icon: Clapperboard },
   { href: "/jobs", label: "Jobs", icon: ListChecks },
-  { href: "/manage", label: "Manage", icon: SlidersHorizontal },
   { href: "/audio", label: "Audio", icon: Mic },
   { href: "/hands", label: "Hands", icon: Hand },
   { href: "/models", label: "Models", icon: ShieldCheck },
@@ -41,7 +40,7 @@ export function Sidebar() {
           </Link>
         );
       })}
-      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Manage adds and removes recordings and people behind the API token.</p>
+      <p className="mt-6 px-3 text-xs text-[var(--muted)]">Add and delete actions sit on each row and need the API token.</p>
     </nav>
   );
 }
