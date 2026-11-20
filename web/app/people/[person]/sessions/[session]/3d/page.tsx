@@ -177,6 +177,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
     const series: EChartsOption["series"] = [];
     const edgeLines = (edges: number[][], colour: string, opacity: number, width: number) => ({
       type: "lines" as const,
+      coordinateSystem: "cartesian2d" as const,
       silent: true,
       lineStyle: { color: colour, opacity, width },
       data: edges.flatMap(([a, b]) => {
