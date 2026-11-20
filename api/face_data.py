@@ -138,13 +138,26 @@ def landmarks(person: str, session: str, index: int, compensated: bool) -> dict:
 
 
 def comparison(person: str, sessions: list[str]) -> dict:
-    if not sessions:
+    return compare_items([(person, sid) for sid in sessions])
+
+
+def compare_items(items: list[tuple[str, str]]) -> dict:
+    """Compare sessions of one or several people. Labels are the session id, or person/session across people."""
+    if not items:
         raise ApiError("invalid_request", "at least one session is required", 400)
-    analyses = {sid: _analysis(person, sid) for sid in sessions}
+    unique = list(dict.fromkeys(items))
+    multi = len({p for p, _ in unique}) > 1
+    analyses = {}
+    people = {}
     rows = []
-    for sid, result in analyses.items():
+    for person, sid in unique:
+        label = f"{person}/{sid}" if multi else sid
+        result = _analysis(person, sid)
+        analyses[label] = result
+        people[label] = person
         rows.append({
-            "session_id": sid,
+            "session_id": label,
+            "person": person,
             "frames": int(len(result.table)),
             "quality_score": _scalar(result.quality["quality_score"]),
             "detection_rate": _scalar(result.quality["detection_rate"]),
@@ -153,26 +166,26 @@ def comparison(person: str, sessions: list[str]) -> dict:
             "landmark_stability": _scalar(np.nanmedian(np.nanstd(result.compensated, axis=0))),
         })
     blend_means: dict = {name: {} for name in COMPARISON_BLENDSHAPES}
-    for sid in analyses:
-        dataset = fa.load_session(fa.make_session(person, sid))
+    for label in analyses:
+        dataset = fa.load_session(fa.make_session(people[label], label.rsplit("/", 1)[-1]))
         for name in COMPARISON_BLENDSHAPES:
             if name in dataset.blendshapes:
-                blend_means[name][sid] = _scalar(dataset.blendshapes[name].mean())
+                blend_means[name][label] = _scalar(dataset.blendshapes[name].mean())
     blend_means = {name: sids for name, sids in blend_means.items() if any(v is not None for v in sids.values())}
     distributions = {}
     for metric in COMPARISON_METRICS:
-        values = {sid: result.table[metric].to_numpy(dtype=float) for sid, result in analyses.items()}
+        values = {label: result.table[metric].to_numpy(dtype=float) for label, result in analyses.items()}
         finite = np.concatenate([v[np.isfinite(v)] for v in values.values()]) if values else np.array([])
         if finite.size == 0:
             distributions[metric] = {"edges": [], "shares": {}}
             continue
         edges = np.linspace(float(finite.min()), float(finite.max()), HISTOGRAM_BINS + 1)
         shares = {}
-        for sid, v in values.items():
+        for label, v in values.items():
             v = v[np.isfinite(v)]
             counts, _ = np.histogram(v, bins=edges)
             total = int(v.size)
-            shares[sid] = [_scalar(c / total) if total else None for c in counts]
+            shares[label] = [_scalar(c / total) if total else None for c in counts]
         distributions[metric] = {"edges": [_scalar(e) for e in edges], "shares": shares}
     return {"sessions": rows, "blendshape_means": blend_means, "distributions": distributions}
 

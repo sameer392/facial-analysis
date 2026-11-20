@@ -94,6 +94,19 @@ def face_landmarks(person: str, session: str, index: int, compensated: bool = Fa
     return face_data.landmarks(person, session, index, compensated)
 
 
+@app.get("/api/comparison")
+def comparison_across(items: str = ""):
+    """Sessions of any people, as person/session pairs separated by commas."""
+    pairs = []
+    for item in items.split(","):
+        if not item:
+            continue
+        if item.count("/") != 1:
+            raise ApiError("invalid_request", "write each item as person/session", 400)
+        pairs.append(tuple(item.split("/", 1)))
+    return face_data.compare_items(pairs)
+
+
 @app.get("/api/persons/{person}/comparison")
 def comparison(person: str, sessions: str = ""):
     names = [s for s in sessions.split(",") if s]

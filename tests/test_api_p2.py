@@ -262,3 +262,20 @@ class ComparisonBlendshapeTests(P2TestCase):
         frames = face_data._face_frames("demo_person", "session-001")
         values = [f["blendshapes"]["jawOpen"] for f in frames if f.get("blendshapes", {}).get("jawOpen") is not None]
         self.assertAlmostEqual(result["blendshape_means"]["jawOpen"]["session-001"], sum(values) / len(values), places=6)
+
+
+class CrossPersonComparisonTests(P2TestCase):
+    def test_items_from_one_person_keep_plain_session_labels(self):
+        result = face_data.compare_items([("demo_person", "session-001"), ("demo_person", "session-002")])
+        self.assertEqual([r["session_id"] for r in result["sessions"]], ["session-001", "session-002"])
+
+    def test_items_from_two_people_use_person_slash_session_labels(self):
+        import shutil
+        target = pp.DATASETS_ROOT / "other_person" / "session-001"
+        shutil.copytree(pp.session_dataset_dir("demo_person", "session-001"), target)
+        result = face_data.compare_items([("demo_person", "session-001"), ("other_person", "session-001")])
+        self.assertEqual(
+            sorted(r["session_id"] for r in result["sessions"]),
+            ["demo_person/session-001", "other_person/session-001"],
+        )
+        self.assertEqual({r["person"] for r in result["sessions"]}, {"demo_person", "other_person"})
