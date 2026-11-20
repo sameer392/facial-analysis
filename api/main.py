@@ -235,3 +235,17 @@ async def upload_video(person: str, session: str, request: Request):
 @app.post("/api/jobs/history/clear", dependencies=[Depends(require_token)])
 def clear_job_history(body: ConfirmRequest):
     return manage.clear_job_history(body.confirm)
+
+
+class NewNameRequest(BaseModel):
+    to: str
+
+
+@app.post("/api/persons/{person}/rename", dependencies=[Depends(require_token)])
+def rename_person(person: str, body: NewNameRequest):
+    return manage.rename_person(person, body.to)
+
+
+@app.post("/api/persons/{person}/sessions/{session}/rename", dependencies=[Depends(require_token)])
+def rename_session(person: str, session: str, body: NewNameRequest):
+    return manage.rename_session(person, session, body.to)

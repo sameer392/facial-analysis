@@ -301,6 +301,11 @@ export const api = {
     send<{ person: string; session: string; bytes: number; uploaded: boolean }>(
       "PUT", `/persons/${enc(person)}/sessions/${enc(session)}/video`, token, undefined, file,
     ),
+  renamePerson: (token: string, person: string, to: string) =>
+    send<{ person: string; renamed_to: string }>("POST", `/persons/${enc(person)}/rename`, token, { to }),
+  renameSession: (token: string, person: string, session: string, to: string) =>
+    send<{ person: string; session: string; renamed_to: string }>(
+      "POST", `/persons/${enc(person)}/sessions/${enc(session)}/rename`, token, { to }),
   clearJobHistory: (token: string, confirm: string) =>
     send<{ removed: number }>("POST", "/jobs/history/clear", token, { confirm }),
 };

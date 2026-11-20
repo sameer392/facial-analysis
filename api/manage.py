@@ -142,3 +142,47 @@ class UploadWriter:
         if not self._handle.closed:
             self._handle.close()
         self.part.unlink(missing_ok=True)
+
+
+def _check_free_person(new: str) -> None:
+    _check_name_person(new)
+    if pp.person_recordings_dir(new).exists() or pp.person_dataset_dir(new).exists():
+        raise ApiError("exists", "a person with this name already exists", 409)
+
+
+def rename_person(person: str, new: str) -> dict:
+    """Rename a person's folders. Refused while any processed data exists, because it records the names."""
+    _check_name_person(person)
+    _check_free_person(new)
+    if not pp.person_recordings_dir(person).is_dir():
+        raise ApiError("not_found", "no such person", 404)
+    if any(jobs.service().store.active_for_session(person, s) for s in pp.list_sessions(person)):
+        raise ApiError("job_active", "a job is running for this person; wait for it to finish", 409)
+    data = pp.person_dataset_dir(person)
+    if data.exists() and any(data.rglob("*")):
+        raise ApiError("has_data", "delete the processed data for this person first, then rename and rebuild", 409)
+    if data.exists():
+        data.rmdir()  # empty: nothing to keep
+    os.replace(pp.person_recordings_dir(person), pp.person_recordings_dir(new))
+    pp.person_dataset_dir(new).mkdir(parents=True, exist_ok=True)
+    return {"person": person, "renamed_to": new}
+
+
+def rename_session(person: str, session: str, new: str) -> dict:
+    """Rename one recording. Refused while its processed data exists, because the data records its name."""
+    _check_name_person(person)
+    _check_session(session)
+    _check_session(new)
+    if session == new:
+        raise ApiError("invalid_request", "the new name is the same", 400)
+    source = pp.session_video(person, session)
+    if not source.is_file():
+        raise ApiError("not_found", "no recording with this name", 404)
+    target = pp.session_video(person, new)
+    if target.exists() or pp.session_dataset_dir(person, new).exists():
+        raise ApiError("exists", "a recording or data with the new name already exists", 409)
+    if pp.session_dataset_dir(person, session).exists():
+        raise ApiError("has_data", "delete the processed data for this session first, then rename and rebuild", 409)
+    _no_active_job(person, session)
+    os.replace(source, target)
+    return {"person": person, "session": session, "renamed_to": new}

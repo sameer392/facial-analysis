@@ -81,3 +81,51 @@ export function ConfirmDialog({
     </div>
   );
 }
+
+const VALID_NAME = /^[a-z0-9_-]+$/;
+
+/** Asks for a new name (and the token if none is set). The name rules are checked here and again by the server. */
+export function RenameDialog({
+  title, current, pending = false, error, onClose, onConfirm,
+}: {
+  title: string;
+  current: string;
+  pending?: boolean;
+  error?: unknown;
+  onClose: () => void;
+  onConfirm: (token: string, newName: string) => void;
+}) {
+  const [token, saveToken, loaded] = useApiToken();
+  const [name, setName] = useState("");
+  const valid = VALID_NAME.test(name) && name !== current;
+  const ready = loaded && token !== "" && valid && !pending;
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="rename-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+      <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-white p-5 shadow-lg dark:bg-slate-900">
+        <h2 id="rename-title" className="text-lg font-semibold">{title}</h2>
+        <p className="mt-2 text-sm text-[var(--muted)]">
+          Current name: <code className="font-mono">{current}</code>. Use lowercase letters, numbers, hyphens or underscores.
+          A recording with processed data must have its data deleted first.
+        </p>
+        <div className="mt-4 flex flex-col gap-3">
+          <TokenField token={token} onChange={saveToken} />
+          <label className="flex flex-col gap-1 text-sm">
+            New name
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus
+              className="rounded border border-[var(--border)] bg-transparent px-2 py-1 font-mono" />
+          </label>
+          {error ? <ErrorState {...errorText(error)} /> : null}
+        </div>
+        <div className="mt-5 flex justify-end gap-2 text-sm">
+          <button type="button" onClick={onClose} className="rounded border border-[var(--border)] px-3 py-1.5">Cancel</button>
+          <button type="button" disabled={!ready} onClick={() => onConfirm(token, name)}
+            className="rounded border border-[var(--border)] px-3 py-1.5 disabled:opacity-40">
+            {pending ? "Renaming…" : "Rename"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

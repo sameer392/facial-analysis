@@ -207,3 +207,55 @@ class JobHistoryTests(ManageTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class RenameTests(ManageTestCase):
+    def test_session_rename_moves_the_recording(self):
+        self.add_session("session-001")
+        result = manage.rename_session("demo_person", "session-001", "session-009")
+        self.assertEqual(result["renamed_to"], "session-009")
+        self.assertFalse(pp.session_video("demo_person", "session-001").exists())
+        self.assertTrue(pp.session_video("demo_person", "session-009").is_file())
+
+    def test_session_rename_is_refused_while_processed_data_exists(self):
+        self.add_session("session-001", with_dataset=True)
+        with self.assertRaises(ApiError) as ctx:
+            manage.rename_session("demo_person", "session-001", "session-009")
+        self.assertEqual(ctx.exception.code, "has_data")
+        self.assertTrue(pp.session_video("demo_person", "session-001").is_file())
+
+    def test_session_rename_refuses_an_existing_name_and_bad_names(self):
+        self.add_session("session-001")
+        self.add_session("session-002")
+        with self.assertRaises(ApiError) as ctx:
+            manage.rename_session("demo_person", "session-001", "session-002")
+        self.assertEqual(ctx.exception.code, "exists")
+        with self.assertRaises(ApiError) as ctx:
+            manage.rename_session("demo_person", "session-001", "Not A Name")
+        self.assertEqual(ctx.exception.status, 400)
+
+    def test_session_rename_is_refused_while_a_job_runs(self):
+        self.add_session("session-001")
+        jobs.service().store.insert("demo_person", "session-001", "face_build", False)
+        with self.assertRaises(ApiError) as ctx:
+            manage.rename_session("demo_person", "session-001", "session-009")
+        self.assertEqual(ctx.exception.code, "job_active")
+
+    def test_person_rename_moves_recordings_and_empty_data_folders(self):
+        self.add_session("session-001")
+        manage.rename_person("demo_person", "new_person")
+        self.assertTrue(pp.session_video("new_person", "session-001").is_file())
+        self.assertFalse(pp.person_recordings_dir("demo_person").exists())
+        self.assertTrue(pp.person_dataset_dir("new_person").is_dir())
+
+    def test_person_rename_is_refused_while_processed_data_exists(self):
+        self.add_session("session-001", with_dataset=True)
+        with self.assertRaises(ApiError) as ctx:
+            manage.rename_person("demo_person", "new_person")
+        self.assertEqual(ctx.exception.code, "has_data")
+        self.assertTrue(pp.person_recordings_dir("demo_person").is_dir())
+
+    def test_rename_routes_need_the_token(self):
+        from api.main import app
+        status, _ = call(app, "POST", "/api/persons/demo_person/sessions/session-001/rename", {"to": "session-009"})
+        self.assertEqual(status, 401)

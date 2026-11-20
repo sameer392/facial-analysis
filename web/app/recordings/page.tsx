@@ -5,13 +5,22 @@ import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
-import { ConfirmDialog } from "../components/manage-ui";
+import { ConfirmDialog, RenameDialog } from "../components/manage-ui";
 
 type Target = { kind: "data" | "video"; person: string; session: string };
+type Renaming = { person: string; session: string };
 
 export default function RecordingsPage() {
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<Target | null>(null);
+  const [renaming, setRenaming] = useState<Renaming | null>(null);
+  const rename = useMutation({
+    mutationFn: ({ token, r, to }: { token: string; r: Renaming; to: string }) => api.renameSession(token, r.person, r.session, to),
+    onSuccess: () => {
+      setRenaming(null);
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
   const persons = useQuery({ queryKey: ["persons"], queryFn: api.persons });
   const sessionQueries = useQueries({
     queries: (persons.data ?? []).map((person) => ({
@@ -65,6 +74,8 @@ export default function RecordingsPage() {
                     <button type="button" onClick={() => setTarget({ kind: "data", person: r.person, session: r.session_id })}
                       className="rounded border border-[var(--border)] px-2 py-1 text-xs">Delete data</button>
                   ) : null}
+                  <button type="button" onClick={() => setRenaming({ person: r.person, session: r.session_id })}
+                    className="rounded border border-[var(--border)] px-2 py-1 text-xs">Rename</button>
                   {r.has_video ? (
                     <button type="button" onClick={() => setTarget({ kind: "video", person: r.person, session: r.session_id })}
                       className="rounded border border-red-300 px-2 py-1 text-xs text-red-800 dark:text-red-200">Delete video</button>
@@ -76,6 +87,16 @@ export default function RecordingsPage() {
         ) : null}
       </Card>
 
+      {renaming ? (
+        <RenameDialog
+          title="Rename this recording?"
+          current={renaming.session}
+          pending={rename.isPending}
+          error={rename.isError ? rename.error : undefined}
+          onClose={() => { setRenaming(null); rename.reset(); }}
+          onConfirm={(token, to) => rename.mutate({ token, r: renaming, to })}
+        />
+      ) : null}
       {target ? (
         <ConfirmDialog
           title={target.kind === "data" ? "Delete the processed data?" : "Delete the video?"}

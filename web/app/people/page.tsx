@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useApiToken } from "../lib/token";
 import { Card, Empty, ErrorState, Loading } from "../components/ui";
-import { ConfirmDialog, TokenField, errorText } from "../components/manage-ui";
+import { ConfirmDialog, RenameDialog, TokenField, errorText } from "../components/manage-ui";
 
 export default function PeoplePage() {
   const queryClient = useQueryClient();
@@ -14,6 +14,7 @@ export default function PeoplePage() {
   const [newName, setNewName] = useState("");
   const [token, saveToken, tokenLoaded] = useApiToken();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const persons = useQuery({ queryKey: ["persons"], queryFn: api.persons });
   const shown = useMemo(
@@ -34,6 +35,11 @@ export default function PeoplePage() {
   const remove = useMutation({
     mutationFn: ({ token: t, person }: { token: string; person: string }) => api.deletePerson(t, person, person),
     onSuccess: (_r, v) => { setDeleting(null); setNotice(`Deleted everything for ${v.person}.`); refresh(); },
+  });
+
+  const rename = useMutation({
+    mutationFn: ({ token: t, person, to }: { token: string; person: string; to: string }) => api.renamePerson(t, person, to),
+    onSuccess: (_r, v) => { setRenaming(null); setNotice(`Renamed ${v.person} to ${v.to}.`); refresh(); },
   });
 
   const onAdd = (event: FormEvent) => {
@@ -97,6 +103,13 @@ export default function PeoplePage() {
               </Link>
               <button
                 type="button"
+                onClick={() => setRenaming(person)}
+                className="rounded border border-[var(--border)] px-2 py-1 text-xs"
+              >
+                Rename
+              </button>
+              <button
+                type="button"
                 onClick={() => setDeleting(person)}
                 className="mr-2 rounded border border-red-300 px-2 py-1 text-xs text-red-800 dark:text-red-200"
               >
@@ -107,6 +120,16 @@ export default function PeoplePage() {
         </ul>
       </Card>
 
+      {renaming ? (
+        <RenameDialog
+          title="Rename this person?"
+          current={renaming}
+          pending={rename.isPending}
+          error={rename.isError ? rename.error : undefined}
+          onClose={() => { setRenaming(null); rename.reset(); }}
+          onConfirm={(t, to) => rename.mutate({ token: t, person: renaming, to })}
+        />
+      ) : null}
       {deleting ? (
         <ConfirmDialog
           title="Delete this person?"
