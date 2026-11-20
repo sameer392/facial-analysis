@@ -83,7 +83,6 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
                       <span className="flex flex-wrap gap-3">
                         {row.session_id}
                         <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/facial`}>facial</Link>
-                        <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/diagnostics`}>diagnostics</Link>
                         <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/3d`}>3D</Link>
                         {row.layout === "pose" ? (
                           <Link className="font-sans underline" href={`/people/${encodeURIComponent(person)}/sessions/${encodeURIComponent(row.session_id)}/body`}>body</Link>
