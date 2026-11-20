@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, Header
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from api import catalog, jobs, system, v1_data, v2_data
+from api import catalog, jobs, system, face_data, pose_data
 from api.catalog import ApiError
 
 
@@ -45,7 +45,7 @@ def require_token(x_facial_token: str | None = Header(default=None)) -> None:
 class JobRequest(BaseModel):
     person: str
     session: str
-    kind: str = "v2_build"
+    kind: str = "pose_build"
     regenerate: bool = False
 
 
@@ -71,67 +71,67 @@ def sessions(person: str):
 
 # ---- phase P2: V1 data for the analysis pages (read-only) ----------------------------------
 
-@app.get("/api/persons/{person}/sessions/{session}/v1/summary")
-def v1_summary(person: str, session: str):
-    return v1_data.summary(person, session)
+@app.get("/api/persons/{person}/sessions/{session}/face/summary")
+def face_summary(person: str, session: str):
+    return face_data.summary(person, session)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v1/series")
-def v1_series(person: str, session: str, fields: str = ""):
+@app.get("/api/persons/{person}/sessions/{session}/face/series")
+def face_series(person: str, session: str, fields: str = ""):
     names = [f for f in fields.split(",") if f]
     if not names:
         raise ApiError("invalid_request", "name at least one field, for example fields=velocity,jaw_open", 400)
-    return v1_data.series(person, session, names)
+    return face_data.series(person, session, names)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v1/blinks")
-def v1_blinks(person: str, session: str):
-    return v1_data.blinks(person, session)
+@app.get("/api/persons/{person}/sessions/{session}/face/blinks")
+def face_blinks(person: str, session: str):
+    return face_data.blinks(person, session)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v1/landmarks/{index}")
-def v1_landmarks(person: str, session: str, index: int, compensated: bool = False):
-    return v1_data.landmarks(person, session, index, compensated)
+@app.get("/api/persons/{person}/sessions/{session}/face/landmarks/{index}")
+def face_landmarks(person: str, session: str, index: int, compensated: bool = False):
+    return face_data.landmarks(person, session, index, compensated)
 
 
 @app.get("/api/persons/{person}/comparison")
 def comparison(person: str, sessions: str = ""):
     names = [s for s in sessions.split(",") if s]
-    return v1_data.comparison(person, names)
+    return face_data.comparison(person, names)
 
 
 # ---- phase P3: V2 Pose and head-pose data for the web pages (read-only) -------------------
 
-@app.get("/api/persons/{person}/sessions/{session}/v2")
-def v2_info(person: str, session: str):
-    return v2_data.info(person, session)
+@app.get("/api/persons/{person}/sessions/{session}/pose")
+def pose_info(person: str, session: str):
+    return pose_data.info(person, session)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v2/timeline")
-def v2_timeline(person: str, session: str):
-    return v2_data.timeline(person, session)
+@app.get("/api/persons/{person}/sessions/{session}/pose/timeline")
+def pose_timeline(person: str, session: str):
+    return pose_data.timeline(person, session)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v2/pose")
-def v2_pose(person: str, session: str, start: int = 0, end: int = 1, threshold: float = v2_data.DEFAULT_THRESHOLD):
-    return v2_data.pose(person, session, start, end, threshold)
+@app.get("/api/persons/{person}/sessions/{session}/pose/frames")
+def pose_frames(person: str, session: str, start: int = 0, end: int = 1, threshold: float = pose_data.DEFAULT_THRESHOLD):
+    return pose_data.pose(person, session, start, end, threshold)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v2/frames/{index}/quality")
-def v2_quality(person: str, session: str, index: int, threshold: float = v2_data.DEFAULT_THRESHOLD):
-    return v2_data.quality(person, session, index, threshold)
+@app.get("/api/persons/{person}/sessions/{session}/pose/frames/{index}/quality")
+def pose_quality(person: str, session: str, index: int, threshold: float = pose_data.DEFAULT_THRESHOLD):
+    return pose_data.quality(person, session, index, threshold)
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v2/frames/{index}/overlay.jpg")
-def v2_overlay(person: str, session: str, index: int, threshold: float = v2_data.DEFAULT_THRESHOLD,
+@app.get("/api/persons/{person}/sessions/{session}/pose/frames/{index}/overlay.jpg")
+def pose_overlay(person: str, session: str, index: int, threshold: float = pose_data.DEFAULT_THRESHOLD,
                points: bool = True, skeleton: bool = True):
-    data = v2_data.overlay_jpeg(person, session, index, threshold, points, skeleton)
+    data = pose_data.overlay_jpeg(person, session, index, threshold, points, skeleton)
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/persons/{person}/sessions/{session}/v1/head-pose")
-def v1_head_pose(person: str, session: str):
-    return v2_data.head_pose(person, session)
+@app.get("/api/persons/{person}/sessions/{session}/face/head-pose")
+def face_head_pose(person: str, session: str):
+    return pose_data.head_pose(person, session)
 
 
 # ---- phase P4: jobs (the only writes; token required) --------------------------------------
@@ -187,19 +187,3 @@ def settings():
 def layers():
     return system.layers()
 
-
-# ---- naming migration, step 2: feature paths (same handlers; the older paths stay for one phase) ----
-_FEATURE_ROUTES = [
-    ("/api/persons/{person}/sessions/{session}/face/summary", v1_summary),
-    ("/api/persons/{person}/sessions/{session}/face/series", v1_series),
-    ("/api/persons/{person}/sessions/{session}/face/blinks", v1_blinks),
-    ("/api/persons/{person}/sessions/{session}/face/landmarks/{index}", v1_landmarks),
-    ("/api/persons/{person}/sessions/{session}/face/head-pose", v1_head_pose),
-    ("/api/persons/{person}/sessions/{session}/pose", v2_info),
-    ("/api/persons/{person}/sessions/{session}/pose/timeline", v2_timeline),
-    ("/api/persons/{person}/sessions/{session}/pose/frames", v2_pose),
-    ("/api/persons/{person}/sessions/{session}/pose/frames/{index}/quality", v2_quality),
-    ("/api/persons/{person}/sessions/{session}/pose/frames/{index}/overlay.jpg", v2_overlay),
-]
-for _path, _handler in _FEATURE_ROUTES:
-    app.add_api_route(_path, _handler, methods=["GET"])

@@ -108,7 +108,7 @@ class P4TestCase(unittest.TestCase):
             time.sleep(0.1)
         self.fail(f"job {job_id} did not reach {states}; last state {job['state']}")
 
-    def post_job(self, session, regenerate=False, kind="v2_build"):
+    def post_job(self, session, regenerate=False, kind="pose_build"):
         from api.main import app
 
         return call(app, "POST", "/api/jobs",
@@ -148,13 +148,6 @@ class RefusalTests(P4TestCase):
         status, body = call(app, "POST", "/api/jobs",
                             {"person": "demo_person", "session": "session-001", "kind": "delete_all"}, token=TOKEN)
         self.assertEqual((status, body["code"]), (400, "invalid_request"))
-
-    def test_older_writer_lock_name_is_refused_too(self):
-        lock = pp.DATASETS_ROOT / "demo_person" / "session-004" / ".v2-lock"
-        lock.parent.joinpath(".pose-lock").unlink(missing_ok=True)
-        lock.write_text("", encoding="utf-8")
-        status, body = self.post_job("session-004")
-        self.assertEqual((status, body["code"]), (409, "writer_lock_present"))
 
     def test_writer_lock_is_refused(self):
         status, body = self.post_job("session-004")
@@ -233,9 +226,9 @@ class LifecycleTests(P4TestCase):
 class RestartTests(P4TestCase):
     def test_active_jobs_are_marked_interrupted_and_leftovers_kept(self):
         store = jobs.service().store
-        job = store.insert("demo_person", "session-001", "v2_build", False)
+        job = store.insert("demo_person", "session-001", "pose_build", False)
         store.update(job["id"], state="running", pid=4242)
-        staging = pp.DATASETS_ROOT / "demo_person" / "session-001" / ".v2-staging-abc"
+        staging = pp.DATASETS_ROOT / "demo_person" / "session-001" / ".pose-staging-abc"
         staging.mkdir()
 
         marked = jobs.recover_interrupted()
@@ -244,12 +237,12 @@ class RestartTests(P4TestCase):
         self.assertEqual(after["state"], "interrupted")
         self.assertIsNone(after["pid"])
         self.assertIn("4242", after["message"])
-        self.assertIn(".v2-staging-abc", after["message"])
+        self.assertIn(".pose-staging-abc", after["message"])
         self.assertTrue(staging.is_dir(), "leftovers must not be removed automatically")
 
     def test_finished_jobs_are_not_touched_on_restart(self):
         store = jobs.service().store
-        job = store.insert("demo_person", "session-002", "v2_build", False)
+        job = store.insert("demo_person", "session-002", "pose_build", False)
         store.update(job["id"], state="succeeded")
         self.assertEqual(jobs.recover_interrupted(), [])
         self.assertEqual(store.get(job["id"])["state"], "succeeded")
@@ -258,25 +251,25 @@ class RestartTests(P4TestCase):
         import sqlite3
 
         store = jobs.service().store
-        store.insert("demo_person", "session-001", "v2_build", False)
+        store.insert("demo_person", "session-001", "pose_build", False)
         with self.assertRaises(sqlite3.IntegrityError):
-            store.insert("demo_person", "session-001", "v2_build", False)
+            store.insert("demo_person", "session-001", "pose_build", False)
 
 
 class FaceKindTests(P4TestCase):
     def test_extraction_refuses_existing_face_data(self):
-        status, body = self.post_job("session-001", kind="v1_extract")
+        status, body = self.post_job("session-001", kind="face_extract")
         self.assertEqual((status, body["code"]), (409, "face_data_exists"))
 
     def test_extraction_refuses_when_the_face_model_fails_its_check(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-003" / "facial_data.json").unlink()
         with mock.patch.object(jobs, "verify_model", side_effect=jobs.ModelIntegrityError("hash mismatch")):
-            status, body = self.post_job("session-003", kind="v1_extract")
+            status, body = self.post_job("session-003", kind="face_extract")
         self.assertEqual((status, body["code"]), (503, "model_integrity"))
         self.assertEqual(jobs.service().store.list(), [])
 
     def test_analysis_runs_and_succeeds(self):
-        status, job = self.post_job("session-001", kind="v1_analyse")
+        status, job = self.post_job("session-001", kind="face_analyse")
         self.assertEqual(status, 202)
         done = self.wait_for(job["id"], ("succeeded", "failed"))
         self.assertEqual(done["kind"], "face_analyse")
@@ -284,23 +277,23 @@ class FaceKindTests(P4TestCase):
 
     def test_analysis_refuses_existing_outputs_unless_regenerate(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-002" / "facial_blendshapes.csv").write_text("x", encoding="utf-8")
-        status, body = self.post_job("session-002", kind="v1_analyse")
+        status, body = self.post_job("session-002", kind="face_analyse")
         self.assertEqual((status, body["code"]), (409, "outputs_exist"))
 
     def test_one_active_job_per_session_across_kinds(self):
-        status, first = self.post_job("session-003", kind="v2_build")
+        status, first = self.post_job("session-003", kind="pose_build")
         self.assertEqual(status, 202)
         self.wait_for(first["id"], ("running",))
-        status, body = self.post_job("session-003", kind="v1_analyse")
+        status, body = self.post_job("session-003", kind="face_analyse")
         self.assertEqual((status, body["code"]), (409, "job_active"))
         jobs.cancel_job(first["id"])
         self.wait_for(first["id"], ("cancelled",))
 
     def test_regenerate_adds_the_matching_flag(self):
         base = {"person": "demo_person", "session": "session-001", "regenerate": True}
-        self.assertIn("--force", jobs.default_command({**base, "kind": "v1_analyse"}))
-        self.assertIn("--regenerate-v2", jobs.default_command({**base, "kind": "v2_build"}))
-        self.assertNotIn("--force", jobs.default_command({**base, "kind": "v1_extract"}))
+        self.assertIn("--force", jobs.default_command({**base, "kind": "face_analyse"}))
+        self.assertIn("--regenerate-v2", jobs.default_command({**base, "kind": "pose_build"}))
+        self.assertNotIn("--force", jobs.default_command({**base, "kind": "face_extract"}))
 
     def test_worker_output_is_unbuffered(self):
         self.assertEqual(jobs.worker_env()["PYTHONUNBUFFERED"], "1")
@@ -309,11 +302,11 @@ class FaceKindTests(P4TestCase):
 class ProgressParsingTests(unittest.TestCase):
     def test_extraction_progress_is_per_frame(self):
         state = {}
-        self.assertEqual(jobs.parse_progress("v1_extract", "Total frames: 200", state), ("extract", 0.0))
-        self.assertEqual(jobs.parse_progress("v1_extract", "Processed: 100", state), ("extract", 0.5))
-        self.assertEqual(jobs.parse_progress("v1_extract", "Processed: 300", state), ("extract", 0.99))
-        self.assertEqual(jobs.parse_progress("v1_extract", "Processing completed!", state), ("publish", 0.99))
-        self.assertIsNone(jobs.parse_progress("v1_extract", "FPS: 30.0", state))
+        self.assertEqual(jobs.parse_progress("face_extract", "Total frames: 200", state), ("extract", 0.0))
+        self.assertEqual(jobs.parse_progress("face_extract", "Processed: 100", state), ("extract", 0.5))
+        self.assertEqual(jobs.parse_progress("face_extract", "Processed: 300", state), ("extract", 0.99))
+        self.assertEqual(jobs.parse_progress("face_extract", "Processing completed!", state), ("publish", 0.99))
+        self.assertIsNone(jobs.parse_progress("face_extract", "FPS: 30.0", state))
 
     def test_build_markers_use_the_current_wording(self):
         self.assertEqual(jobs.parse_progress("pose_build", "Building the pose data payload...", {}), ("assemble", 4 / 6))
@@ -323,19 +316,19 @@ class ProgressParsingTests(unittest.TestCase):
         self.assertIsNone(jobs.parse_progress("pose_build", "V2 session published: /x", {}))
 
     def test_analysis_and_build_markers(self):
-        self.assertEqual(jobs.parse_progress("v1_analyse", "CSV created: x", {}), ("assemble", 0.25))
-        self.assertEqual(jobs.parse_progress("v1_analyse", "Metadata: x", {}), ("verify", 0.9))
-        self.assertEqual(jobs.parse_progress("v2_build", "Extracting pose landmarks...", {}), ("extract", 3 / 6))
-        self.assertIsNone(jobs.parse_progress("v2_build", "unrelated line", {}))
+        self.assertEqual(jobs.parse_progress("face_analyse", "CSV created: x", {}), ("assemble", 0.25))
+        self.assertEqual(jobs.parse_progress("face_analyse", "Metadata: x", {}), ("verify", 0.9))
+        self.assertEqual(jobs.parse_progress("pose_build", "Extracting pose landmarks...", {}), ("extract", 3 / 6))
+        self.assertIsNone(jobs.parse_progress("pose_build", "unrelated line", {}))
 
     def test_partly_written_frames_are_reported_for_extraction(self):
         tmp = Path(tempfile.mkdtemp(prefix="leftover_"))
         try:
             (tmp / "frames").mkdir()
             (tmp / "frames" / "frame_000000.jpg").write_bytes(b"x")
-            self.assertEqual(jobs.leftovers(tmp, "v1_extract"), ["frames/ (partly written)"])
+            self.assertEqual(jobs.leftovers(tmp, "face_extract"), ["frames/ (partly written)"])
             (tmp / "facial_data.json").write_text("[]", encoding="utf-8")
-            self.assertEqual(jobs.leftovers(tmp, "v1_extract"), [])
+            self.assertEqual(jobs.leftovers(tmp, "face_extract"), [])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

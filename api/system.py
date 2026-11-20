@@ -21,7 +21,7 @@ for _p in (_ROOT / "src" / "analysis", _ROOT / "src" / "extraction"):
 
 import project_paths as pp  # noqa: E402
 from model_registry import MODELS, MODELS_DIR, ModelSpec, sha256_file  # noqa: E402
-from schema_v2 import SCHEMA_VERSION  # noqa: E402
+from pose_schema import SCHEMA_VERSION  # noqa: E402
 
 _hash_cache: dict = {}
 MAX_TAIL_LINES = 2000

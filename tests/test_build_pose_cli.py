@@ -18,10 +18,10 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
 sys.path.insert(0, str(ROOT / "tests"))
 
-from extraction import build_v2_session as cli  # noqa: E402
+from extraction import build_pose_session as cli  # noqa: E402
 from extraction import model_registry as mr  # noqa: E402
 import project_paths as pp  # noqa: E402
-import schema_v2 as s2  # noqa: E402
+import pose_schema as s2  # noqa: E402
 import test_pose_builder as tvb  # noqa: E402  (synthetic V1 frames and fake detector)
 
 W, H, FPS, N = 64, 48, 10, 8
@@ -232,7 +232,7 @@ class RollbackOnFaceChangeTests(CliTestCase):
         from unittest import mock
 
         def failing_rollback(_session):
-            raise cli.V2Error("simulated rollback failure")
+            raise cli.PoseDataError("simulated rollback failure")
 
         with mock.patch.object(cli, "rollback_v2", side_effect=failing_rollback):
             code, _, err = self.run_cli(detector=self._tamper_at_first_frame())

@@ -15,9 +15,9 @@ sys.path.insert(0, str(ROOT / "src" / "dashboard"))
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
 sys.path.insert(0, str(ROOT / "tests"))
 
-import v2_viewer as vv  # noqa: E402
-import session_writer_v2 as w  # noqa: E402
-import schema_v2 as s2  # noqa: E402
+import pose_viewer as vv  # noqa: E402
+import pose_writer as w  # noqa: E402
+import pose_schema as s2  # noqa: E402
 import project_paths as pp  # noqa: E402
 import test_pose_writer as tsw  # noqa: E402  (synthetic V2 payload)
 
@@ -48,7 +48,7 @@ def pose_frame(x=0.5, y=0.5, vis=0.9):
 
 class DiscoveryTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="v2_viewer_"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="pose_viewer_"))
         self.root = self.tmp / "datasets"
         self._orig = pp.DATASETS_ROOT
         pp.DATASETS_ROOT = self.root
@@ -103,7 +103,7 @@ class DiscoveryTests(unittest.TestCase):
 
 class ArrayAndTimelineTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="v2_viewer_arr_"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="pose_viewer_arr_"))
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -111,13 +111,13 @@ class ArrayAndTimelineTests(unittest.TestCase):
     def test_pose_array_shape_is_checked(self):
         session = write_pose(self.tmp / "s")
         np.save(session / "body" / "pose_landmarks.npy", np.zeros((N, 32, 5), dtype=np.float32))
-        with self.assertRaisesRegex(vv.V2ViewerError, "shape"):
+        with self.assertRaisesRegex(vv.PoseDataViewerError, "shape"):
             vv.load_pose(session)
 
     def test_pose_array_dtype_is_checked(self):
         session = write_pose(self.tmp / "s")
         np.save(session / "body" / "pose_landmarks.npy", np.zeros((N, 33, 5), dtype=np.float64))
-        with self.assertRaisesRegex(vv.V2ViewerError, "dtype"):
+        with self.assertRaisesRegex(vv.PoseDataViewerError, "dtype"):
             vv.load_pose(session)
 
     def test_missing_detection_frames_are_nan_rows(self):
@@ -132,7 +132,7 @@ class ArrayAndTimelineTests(unittest.TestCase):
         session = write_pose(self.tmp / "s")
         timeline = pd.read_csv(session / "timeline.csv").iloc[:-1]
         timeline.to_csv(session / "timeline.csv", index=False)
-        with self.assertRaises(vv.V2ViewerError):
+        with self.assertRaises(vv.PoseDataViewerError):
             vv.load_timeline(session, expected_frames=N)
 
 

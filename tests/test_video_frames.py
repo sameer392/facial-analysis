@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "src" / "analysis"))
 sys.path.insert(0, str(ROOT / "src"))
 
 from extraction import video_frames as vf  # noqa: E402
-from schema_v2 import frame_timestamps_ms  # noqa: E402
+from pose_schema import frame_timestamps_ms  # noqa: E402
 
 W, H, FPS, N = 64, 48, 10, 12
 

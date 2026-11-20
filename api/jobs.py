@@ -5,10 +5,9 @@ down the API. Job records are kept in a small SQLite database under logs/. The d
 by those scripts, never by this module.
 
 Kinds:
-  pose_build     src/extraction/build_v2_session.py  (pose data; --regenerate-v2 replaces it)
+  pose_build     src/extraction/build_pose_session.py  (pose data; --regenerate-v2 replaces it)
   face_extract   src/analysis/extract_faces.py        (face data; refuses existing data, no regenerate)
   face_analyse   src/analysis/analyze_faces.py        (blendshape and motion outputs; --force regenerates)
-Older codes (v2_build, v1_extract, v1_analyse) are still accepted and mapped to these.
 
 Lifecycle: queued -> running -> succeeded | failed | cancelled, and interrupted when the API restarts while a
 job is active. Progress is per frame for face_extract (from the script's "Processed" lines) and per stage for the
@@ -39,25 +38,24 @@ for _p in (ROOT / "src" / "analysis", ROOT / "src" / "extraction"):
         sys.path.insert(0, str(_p))
 
 import project_paths as pp  # noqa: E402
-from schema_v2 import session_layout  # noqa: E402
-from session_writer_v2 import LOCK_FILE, LOCK_FILES, PREVIOUS_PREFIXES, STAGING_PREFIXES  # noqa: E402
+from pose_schema import session_layout  # noqa: E402
+from pose_writer import LOCK_FILE, PREVIOUS_PREFIX, STAGING_PREFIX  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
 from facial_analyzer import make_session, motion_output_paths  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
 KINDS = ("pose_build", "face_extract", "face_analyse")
 # Older job codes, still accepted in requests and mapped when rows are read.
-KIND_ALIASES = {"v2_build": "pose_build", "v1_extract": "face_extract", "v1_analyse": "face_analyse"}
 SCRIPTS = {
-    "pose_build": ROOT / "src" / "extraction" / "build_v2_session.py",
+    "pose_build": ROOT / "src" / "extraction" / "build_pose_session.py",
     "face_extract": ROOT / "src" / "analysis" / "extract_faces.py",
     "face_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
 }
 ACTIVE = ("queued", "running")
-LEFTOVER_PREFIXES = STAGING_PREFIXES + PREVIOUS_PREFIXES
+LEFTOVER_PREFIXES = (STAGING_PREFIX, PREVIOUS_PREFIX)
 
-V2_STAGES = ("validate", "model", "extract", "assemble", "publish", "verify")
-V2_MARKERS = (
+POSE_STAGES = ("validate", "model", "extract", "assemble", "publish", "verify")
+POSE_MARKERS = (
     ("Video:", "validate"),
     ("Pose Landmarker FULL loaded", "model"),
     ("Extracting pose", "extract"),
@@ -65,7 +63,7 @@ V2_MARKERS = (
     ("Publishing the pose data", "publish"),
     ("Pose data published", "verify"),
 )
-V1_ANALYSE_MARKERS = (
+FACE_ANALYSE_MARKERS = (
     ("CSV created:", "assemble", 0.25),
     ("Motion outputs:", "publish", 0.6),
     ("Metadata:", "verify", 0.9),
@@ -116,6 +114,12 @@ class JobStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            # Rows written before the job codes were renamed. Idempotent: it does nothing once they are updated.
+            conn.execute(
+                "UPDATE jobs SET kind = CASE kind WHEN 'v2_build' THEN 'pose_build' "
+                "WHEN 'v1_extract' THEN 'face_extract' WHEN 'v1_analyse' THEN 'face_analyse' END "
+                "WHERE kind IN ('v2_build', 'v1_extract', 'v1_analyse')"
+            )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=10)
@@ -152,14 +156,8 @@ class JobStore:
                          (*fields.values(), _now(), job_id))
 
 
-def canonical_kind(kind: str) -> str:
-    """The current name for a job kind. Older names map to the current ones."""
-    return KIND_ALIASES.get(kind, kind)
-
-
 def _row(row) -> dict:
     d = dict(row)
-    d["kind"] = canonical_kind(d["kind"])
     d["regenerate"] = bool(d["regenerate"])
     d["cancel_requested"] = bool(d["cancel_requested"])
     return d
@@ -170,11 +168,10 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
 
     state holds what earlier lines taught us (the total frame count for extraction).
     """
-    kind = canonical_kind(kind)
     if kind == "pose_build":
-        for marker, stage in V2_MARKERS:
+        for marker, stage in POSE_MARKERS:
             if marker in line:
-                return stage, (V2_STAGES.index(stage) + 1) / len(V2_STAGES)
+                return stage, (POSE_STAGES.index(stage) + 1) / len(POSE_STAGES)
         return None
     if kind == "face_extract":
         m = _TOTAL_RE.match(line)
@@ -190,7 +187,7 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
             return "publish", 0.99
         return None
     if kind == "face_analyse":
-        for marker, stage, fraction in V1_ANALYSE_MARKERS:
+        for marker, stage, fraction in FACE_ANALYSE_MARKERS:
             if marker in line:
                 return stage, fraction
         return None
@@ -204,17 +201,17 @@ def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
         return []
     names = []
     for p in sorted(dataset_dir.iterdir()):
-        if p.name in LOCK_FILES or p.name.startswith(LEFTOVER_PREFIXES):
+        if p.name == LOCK_FILE or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
     frames = dataset_dir / "frames"
-    if canonical_kind(kind or "") == "face_extract" and not (dataset_dir / "facial_data.json").exists() \
+    if kind == "face_extract" and not (dataset_dir / "facial_data.json").exists() \
             and frames.is_dir() and any(frames.iterdir()):
         names.append("frames/ (partly written)")
     return names
 
 
 def default_command(job: dict) -> list[str]:
-    kind = canonical_kind(job["kind"])
+    kind = job["kind"]
     cmd = [sys.executable, str(SCRIPTS[kind]), job["person"], job["session"]]
     if job["regenerate"]:
         if kind == "pose_build":
@@ -332,7 +329,6 @@ def token_ok(presented: str | None) -> bool:
 
 def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     """The same refusals as the scripts, checked before anything is queued."""
-    kind = canonical_kind(kind)
     if kind not in KINDS:
         raise ApiError("invalid_request", f"unknown job kind: {kind!r}", 400)
     _check_person(person)
@@ -342,7 +338,7 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     dataset = pp.session_dataset_dir(person, session)
     if not video.is_file():
         raise ApiError("no_video", "the recording for this session is missing", 422)
-    if any((dataset / name).exists() for name in LOCK_FILES):
+    if (dataset / LOCK_FILE).exists():
         raise ApiError("writer_lock_present", "the writer lock is present; another run may be active or interrupted", 409)
 
     if kind == "pose_build":
@@ -368,7 +364,6 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
 
 
 def create_job(person: str, session: str, kind: str, regenerate: bool) -> dict:
-    kind = canonical_kind(kind)
     check_job(kind, person, session, regenerate)
     svc = service()
     try:

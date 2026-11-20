@@ -15,8 +15,8 @@ from dashboard_bootstrap import reload_project_modules  # noqa: E402
 reload_project_modules()
 
 import project_paths as pp  # noqa: E402
-import v2_viewer as vv  # noqa: E402
-from schema_v2 import session_layout  # noqa: E402
+import pose_viewer as vv  # noqa: E402
+from pose_schema import session_layout  # noqa: E402
 
 DEFAULT_THRESHOLD = 0.5  # the same empirical default as the pose visibility gate
 
@@ -30,7 +30,7 @@ def checked_session(session_path: str, metadata_mtime_ns: int, person: str, sess
     """Validated V2 session, or the reason it was rejected. Keyed on metadata mtime, so regeneration refreshes it."""
     try:
         return vv.validate_v2_session(Path(session_path), person, session_id), None
-    except vv.V2ViewerError as exc:
+    except vv.PoseDataViewerError as exc:
         return None, str(exc)
 
 
@@ -79,7 +79,7 @@ if rejected:
 if not valid:
     st.info(
         "No valid V2 Pose sessions were found. Create one with the command line: "
-        "`python src/extraction/build_v2_session.py <person> <session>`. "
+        "`python src/extraction/build_pose_session.py <person> <session>`. "
         "Sessions appear here only after their metadata, manifest and arrays pass the checks."
     )
     st.stop()

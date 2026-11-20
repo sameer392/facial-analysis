@@ -1,6 +1,6 @@
 # Proposal: remove version names from the product (naming migration)
 
-Status: Steps 0 to 4 are done. Step 3 (printed output and the job parser) is done: the scripts print the new wording, and the parser reads only the new markers. Step 4 (docs and test names) is done. Step 5 (remove the old names) is not started.
+Status: Steps 0 to 5 are done. Step 5 removed the old names as requested, before the one-phase wait this plan suggested; the dataset check was run at Step 1 and the datasets were rebuilt from raw videos with the new code. Step 3 (printed output and the job parser) is done: the scripts print the new wording, and the parser reads only the new markers. Step 4 (docs and test names) is done. Step 5 (remove the old names) is not started.
 
 ## 1. Goal
 

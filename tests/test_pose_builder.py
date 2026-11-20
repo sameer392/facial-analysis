@@ -16,9 +16,9 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
 
 from extraction import pose_extractor as pe  # noqa: E402
-from extraction import v2_session_builder as sb  # noqa: E402
-import schema_v2 as s2  # noqa: E402
-import session_writer_v2 as w  # noqa: E402
+from extraction import pose_builder as sb  # noqa: E402
+import pose_schema as s2  # noqa: E402
+import pose_writer as w  # noqa: E402
 
 W, H, FPS, N = 64, 48, 10, 8
 V1_FILES = {
@@ -68,7 +68,7 @@ def pose_result(n=N, missing=()):
 
 class SessionTestCase(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="v2_builder_"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="pose_builder_"))
         self.session = self.tmp / "datasets" / "demo_person" / "session-001"
         self.session.mkdir(parents=True)
         self.write_face()
@@ -138,7 +138,7 @@ class PayloadTests(SessionTestCase):
 
     def test_metadata_records_models_and_configuration(self):
         meta = self.build().metadata
-        # schema_v2 stores SHA-256 in lowercase, as hashlib produces it
+        # pose_schema stores SHA-256 in lowercase, as hashlib produces it
         self.assertEqual(meta["models"]["pose_full"]["sha256"],
                          "4eaa5eb7a98365221087693fcc286334cf0858e2eb6e15b506aa4a7ecdcec4ad")
         self.assertIn(meta["models"]["pose_full"]["licence_status"], ("verified", "to verify"))

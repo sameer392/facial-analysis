@@ -14,7 +14,7 @@ if str(_ANALYSIS) not in sys.path:
     sys.path.insert(0, str(_ANALYSIS))
 
 import project_paths as pp  # noqa: E402
-import schema_v2 as s2  # noqa: E402
+import pose_schema as s2  # noqa: E402
 
 API_VERSION = "0.1.0"
 

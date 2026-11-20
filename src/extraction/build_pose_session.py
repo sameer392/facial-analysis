@@ -1,10 +1,10 @@
 """Command-line entry point: process an existing V1 session into a V2 session with Pose output.
 
 Usage:
-    python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+    python src/extraction/build_pose_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
 
 Example:
-    python src/extraction/build_v2_session.py demo_person session-001
+    python src/extraction/build_pose_session.py demo_person session-001
 
 Requires: the raw video recordings/raw/<person>/<session>.mp4, the V1 facial data
 datasets/<person>/<session>/facial_data.json (from extract_faces.py), and the Pose FULL model in
@@ -39,7 +39,7 @@ for _p in (_SRC, _ANALYSIS):
 
 from extraction.model_registry import MODELS_DIR, ModelIntegrityError  # noqa: E402
 from extraction.pose_extractor import ExtractionError, extract_pose_video, load_pose_detector  # noqa: E402
-from extraction.v2_session_builder import BuildError, build_payload  # noqa: E402
+from extraction.pose_builder import BuildError, build_payload  # noqa: E402
 from extraction.video_frames import VideoError, open_video_info  # noqa: E402
 from project_paths import (  # noqa: E402
     is_valid_person,
@@ -47,8 +47,8 @@ from project_paths import (  # noqa: E402
     session_dataset_dir,
     session_video,
 )
-from schema_v2 import session_layout  # noqa: E402
-from session_writer_v2 import V2Error, V2ExistsError, rollback_v2, write_v2_session  # noqa: E402
+from pose_schema import session_layout  # noqa: E402
+from pose_writer import PoseDataError, PoseDataExistsError, rollback_v2, write_v2_session  # noqa: E402
 
 EXIT_OK, EXIT_FAILED, EXIT_REFUSED, EXIT_MODEL, EXIT_V1_CHANGED = 0, 1, 2, 3, 4
 V1_FILES = ("facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
@@ -93,7 +93,7 @@ def _rollback_after_v1_change(dataset: Path, had_previous: bool) -> str:
     expected = "v2" if had_previous else "v1"
     try:
         rollback_v2(dataset)
-    except V2Error as exc:
+    except PoseDataError as exc:
         return (f"rollback FAILED: {exc}. The V2 files from this run were left in place, "
                 "so the session state is not confirmed.")
     layout = session_layout(dataset)
@@ -159,13 +159,13 @@ def main(argv=None, detector_factory=None) -> int:
                                 video_filename=video.name, video_size=(info.width, info.height))
         print("Publishing the pose data...")
         write_v2_session(dataset, payload, regenerate=args.regenerate_v2)
-    except V2ExistsError as exc:
+    except PoseDataExistsError as exc:
         _error(str(exc))
         return EXIT_REFUSED
     except (VideoError, ExtractionError, BuildError) as exc:
         _error(str(exc))
         return EXIT_FAILED
-    except V2Error as exc:
+    except PoseDataError as exc:
         _error(f"{exc}. If no other run is active, run recover_incomplete_v2 for this session.")
         return EXIT_FAILED
     except Exception as exc:  # report anything unexpected; the detector is still closed below

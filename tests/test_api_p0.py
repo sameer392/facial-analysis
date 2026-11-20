@@ -15,8 +15,8 @@ sys.path.insert(0, str(ROOT / "src" / "analysis"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import project_paths as pp  # noqa: E402
-import schema_v2 as s2  # noqa: E402
-import session_writer_v2 as w  # noqa: E402
+import pose_schema as s2  # noqa: E402
+import pose_writer as w  # noqa: E402
 import test_pose_writer as tsw  # noqa: E402  (synthetic V2 payload)
 from api import catalog  # noqa: E402
 from api.catalog import ApiError  # noqa: E402

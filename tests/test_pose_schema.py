@@ -13,7 +13,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
 
-import schema_v2 as s2  # noqa: E402
+import pose_schema as s2  # noqa: E402
 
 T = 6
 GOOD_SHA = hashlib.sha256(b"model").hexdigest()
@@ -229,7 +229,7 @@ class ManifestTests(unittest.TestCase):
 
 class LayoutTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp(prefix="schema_v2_"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="pose_schema_"))
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)

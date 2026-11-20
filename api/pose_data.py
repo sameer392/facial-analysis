@@ -1,6 +1,6 @@
 """Read-only V2 Pose data and V1 head-pose data for the web pages (phase P3).
 
-Numbers come from src/dashboard/v2_viewer.py and src/analysis/facial_3d_analyzer.py, the same code the
+Numbers come from src/dashboard/pose_viewer.py and src/analysis/facial_3d_analyzer.py, the same code the
 Streamlit pages use. NaN and infinity become null. Validation results are cached per session, keyed on
 the modification time of metadata.json, so a regenerated session is checked again. Nothing is written.
 """
@@ -22,9 +22,9 @@ import cv2  # noqa: E402
 import facial_3d_analyzer as f3  # noqa: E402
 import facial_analyzer as fa  # noqa: E402
 import project_paths as pp  # noqa: E402
-import v2_viewer as vv  # noqa: E402
-from schema_v2 import session_layout  # noqa: E402
-from api import v1_data  # noqa: E402
+import pose_viewer as vv  # noqa: E402
+from pose_schema import session_layout  # noqa: E402
+from api import face_data  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
 
 MAX_FRAMES_PER_REQUEST = 300
@@ -65,7 +65,7 @@ def _v2_dir(person: str, session: str) -> Path:
     if layout == "incomplete_v2":
         raise ApiError("incomplete_v2", "pose data is incomplete (metadata.json missing or unreadable)", 409)
     if layout != "v2":
-        raise ApiError("no_v2_data", "no pose data for this session", 404)
+        raise ApiError("no_pose_data", "no pose data for this session", 404)
     return folder
 
 
@@ -78,7 +78,7 @@ def _validated(person: str, session: str):
             info = vv.validate_v2_session(folder, person, session)
             pose = vv.load_pose(folder)
             timeline = vv.load_timeline(folder, expected_frames=pose.shape[0])
-        except vv.V2ViewerError as exc:
+        except vv.PoseDataViewerError as exc:
             _cache[key] = ("invalid", str(exc))
         else:
             _cache.clear()
@@ -179,7 +179,7 @@ def overlay_jpeg(person: str, session: str, index: int, threshold: float,
 
 def head_pose(person: str, session: str) -> dict:
     """Yaw, pitch and roll, and the face depth span, per frame. Same functions as the 3D Streamlit page."""
-    result = v1_data._analysis(person, session)
+    result = face_data._analysis(person, session)
     ds = fa.load_session(fa.make_session(person, session))
     angles = f3.head_pose_angles(ds.matrices)
     depth = f3.depth_range_per_frame(ds.landmarks)

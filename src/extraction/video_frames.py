@@ -8,7 +8,7 @@ with the file name, so no frames are silently dropped.
 
 Timestamps come from the frame rate (round(i * 1000 / fps), the same rule as the V2 schema),
 because decoded presentation times are not yet extracted. The source is recorded as "fps_derived".
-Requires src/analysis on sys.path (for schema_v2), as the other modules do.
+Requires src/analysis on sys.path (for pose_schema), as the other modules do.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ _ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "analysis"
 if str(_ANALYSIS_DIR) not in sys.path:
     sys.path.insert(0, str(_ANALYSIS_DIR))
 
-from schema_v2 import frame_timestamps_ms  # noqa: E402
+from pose_schema import frame_timestamps_ms  # noqa: E402
 
 
 class VideoError(Exception):

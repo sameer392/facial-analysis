@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "src" / "analysis"))
 from extraction import pose_extractor as pe  # noqa: E402
 from extraction.model_registry import ModelIntegrityError  # noqa: E402
 from extraction.video_frames import VideoError  # noqa: E402
-from schema_v2 import frame_timestamps_ms  # noqa: E402
+from pose_schema import frame_timestamps_ms  # noqa: E402
 
 W, H, FPS, N = 64, 48, 10, 8
 

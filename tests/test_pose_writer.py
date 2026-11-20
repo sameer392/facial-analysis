@@ -14,8 +14,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "analysis"))
 
-import schema_v2 as s2  # noqa: E402
-import session_writer_v2 as w  # noqa: E402
+import pose_schema as s2  # noqa: E402
+import pose_writer as w  # noqa: E402
 
 T = 6
 MODEL_SHA = hashlib.sha256(b"synthetic model").hexdigest()
@@ -29,7 +29,7 @@ V1_FILES = {
 }
 
 
-def make_payload(n=T, seed=0) -> w.V2Payload:
+def make_payload(n=T, seed=0) -> w.PoseDataPayload:
     rng = np.random.default_rng(seed)
     arrays = {
         "facial/landmarks.npy": rng.random((n, 478, 3)).astype(np.float32),
@@ -72,7 +72,7 @@ def make_payload(n=T, seed=0) -> w.V2Payload:
                     "hands": {"status": "absent"}},
         "outputs": {},
     }
-    return w.V2Payload(arrays=arrays, timeline_rows=timeline, handedness_rows=handedness,
+    return w.PoseDataPayload(arrays=arrays, timeline_rows=timeline, handedness_rows=handedness,
                        blendshapes=blend, quality={"frames": n}, metadata=metadata)
 
 
@@ -145,7 +145,7 @@ class CreationTests(SessionTestCase):
     def test_invalid_payload_is_rejected_before_anything_is_written(self):
         payload = make_payload()
         payload.arrays["body/pose_landmarks.npy"] = np.zeros((T, 32, 5), dtype=np.float32)
-        with self.assertRaises(w.V2ValidationError):
+        with self.assertRaises(w.PoseDataValidationError):
             w.write_v2_session(self.session, payload)
         self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2")], [])
         self.assertFalse((self.session / "metadata.json").exists())
@@ -268,14 +268,14 @@ class InterruptionTests(SessionTestCase):
 class RegenerationAndRollbackTests(SessionTestCase):
     def test_existing_pose_is_protected_by_default(self):
         w.write_v2_session(self.session, make_payload())
-        with self.assertRaises(w.V2ExistsError):
+        with self.assertRaises(w.PoseDataExistsError):
             w.write_v2_session(self.session, make_payload(seed=1))
 
     def test_regeneration_refuses_when_existing_manifest_is_unreadable(self):
         w.write_v2_session(self.session, make_payload(seed=0))
         old = (self.session / "facial" / "landmarks.npy").read_bytes()
         (self.session / "manifest.json").write_text("{corrupt", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.write_v2_session(self.session, make_payload(seed=1), regenerate=True)
         self.assertEqual((self.session / "facial" / "landmarks.npy").read_bytes(), old)
 
@@ -318,52 +318,19 @@ class RegenerationAndRollbackTests(SessionTestCase):
     def test_rollback_refuses_modified_files(self):
         w.write_v2_session(self.session, make_payload())
         (self.session / "timeline.csv").write_text("changed\n")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.rollback_v2(self.session)
         self.assertTrue((self.session / "timeline.csv").is_file())
 
     def test_rollback_without_manifest_is_refused(self):
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.rollback_v2(self.session)
-
-
-class LegacyNameTests(SessionTestCase):
-    """Older builds used .v2-lock and .v2-staging-*. They must still block writes and be recovered."""
-
-    def test_legacy_lock_refuses_a_write(self):
-        (self.session / w.LEGACY_LOCK_FILE).write_text("777", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
-            w.write_v2_session(self.session, make_payload())
-        self.assertTrue((self.session / w.LEGACY_LOCK_FILE).is_file())
-        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-")], [])
-
-    def test_legacy_staging_folder_is_removed_by_recovery(self):
-        legacy = self.session / (w.LEGACY_STAGING_PREFIX + "old")
-        legacy.mkdir(parents=True)
-        (legacy / "leftover.bin").write_bytes(b"x")
-        actions = w.recover_incomplete_v2(self.session)
-        self.assertFalse(legacy.exists())
-        self.assertTrue(any(".v2-staging-old" in a for a in actions))
-
-    def test_legacy_lock_is_cleared_by_recovery(self):
-        (self.session / w.LEGACY_LOCK_FILE).write_text("777", encoding="utf-8")
-        actions = w.recover_incomplete_v2(self.session)
-        self.assertFalse((self.session / w.LEGACY_LOCK_FILE).exists())
-        self.assertTrue(any(".v2-lock" in a for a in actions))
-
-    def test_new_lock_has_the_new_name_and_is_released(self):
-        lock = w._acquire_lock(self.session)
-        self.assertEqual(lock.name, ".pose-lock")
-        with self.assertRaises(w.V2Error):
-            w._acquire_lock(self.session)
-        w._release_lock(self.session)
-        self.assertFalse((self.session / ".pose-lock").exists())
 
 
 class LockTests(SessionTestCase):
     def test_second_writer_is_refused_while_lock_is_held(self):
         (self.session / w.LOCK_FILE).write_text("12345", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.write_v2_session(self.session, make_payload())
         self.assertTrue((self.session / w.LOCK_FILE).is_file())
         self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
@@ -412,7 +379,7 @@ class PostPublicationTests(SessionTestCase):
                 Path(dst).write_bytes(b"damaged")
 
         with mock.patch.object(w.os, "replace", side_effect=damaging_replace):
-            with self.assertRaises(w.V2Error):
+            with self.assertRaises(w.PoseDataError):
                 w.write_v2_session(self.session, make_payload())
         self.assertFalse((self.session / "metadata.json").exists())
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
@@ -427,7 +394,7 @@ class RecoverySafetyTests(SessionTestCase):
     def test_recovery_refuses_a_corrupt_manifest_and_deletes_nothing(self):
         self._interrupted_publish()
         (self.session / "manifest.json").write_text("{corrupt", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.recover_incomplete_v2(self.session)
         self.assertTrue((self.session / "manifest.json").is_file())
         self.assertTrue((self.session / "facial" / "landmarks.npy").is_file())
@@ -438,14 +405,14 @@ class RecoverySafetyTests(SessionTestCase):
         manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
         manifest["files"].append({"path": "facial_data.json", "bytes": 1, "sha256": "0" * 64})
         (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.recover_incomplete_v2(self.session)
         self.assert_face_unchanged()
 
     def test_recovery_refuses_to_delete_a_modified_file(self):
         self._interrupted_publish()
         (self.session / "timeline.csv").write_text("edited by hand\n", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.recover_incomplete_v2(self.session)
         self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "edited by hand\n")
 
@@ -454,7 +421,7 @@ class RecoverySafetyTests(SessionTestCase):
         manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
         manifest["files"].append({"path": "calibration.json", "bytes": 1, "sha256": "0" * 64})
         (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.rollback_v2(self.session)
         self.assert_face_unchanged()
 
@@ -468,7 +435,7 @@ class HeaderReadTests(SessionTestCase):
 
     def test_writer_does_not_memory_map_outputs(self):
         # Memory-mapped views can keep a file open, which blocks renames on Windows.
-        source = (ROOT / "src" / "analysis" / "session_writer_v2.py").read_text(encoding="utf-8")
+        source = (ROOT / "src" / "analysis" / "pose_writer.py").read_text(encoding="utf-8")
         self.assertNotIn("mmap_mode", source)
 
 
@@ -502,7 +469,7 @@ class StagingCleanupTests(SessionTestCase):
 class DestinationCollisionTests(SessionTestCase):
     def test_stray_file_at_a_destination_is_not_overwritten(self):
         (self.session / "timeline.csv").write_text("stray\n", encoding="utf-8")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.write_v2_session(self.session, make_payload())
         self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "stray\n")
         self.assertFalse((self.session / "metadata.json").exists())
@@ -511,7 +478,7 @@ class DestinationCollisionTests(SessionTestCase):
     def test_collision_check_leaves_no_staging_folder(self):
         (self.session / "facial").mkdir()
         (self.session / "facial" / "landmarks.npy").write_bytes(b"stray")
-        with self.assertRaises(w.V2Error):
+        with self.assertRaises(w.PoseDataError):
             w.write_v2_session(self.session, make_payload())
         self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
 
@@ -548,7 +515,7 @@ class PathTests(unittest.TestCase):
 
     def test_escaping_paths_are_refused(self):
         for bad in ("../x", "/abs/x", "a/../../x", "", "a//b"):
-            with self.subTest(path=bad), self.assertRaises(w.V2ValidationError):
+            with self.subTest(path=bad), self.assertRaises(w.PoseDataValidationError):
                 w._rel_to_path(bad, Path("base"))
 
 

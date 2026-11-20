@@ -61,7 +61,7 @@ Pose data files that share a name with a face data file are placed in a subfolde
 
 ## Metadata (`metadata.json`)
 
-Required sections (checked by `schema_v2.validate_metadata`):
+Required sections (checked by `pose_schema.validate_metadata`):
 
 - `schema_version`: `2.x`
 - `identity`: person and session identifiers
@@ -88,7 +88,7 @@ Model files are kept in `models/mediapipe/`, which git ignores. They are never c
 ## Command-line entry point
 
 ```powershell
-python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
+python src/extraction/build_pose_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
 ```
 
 It processes an existing face data session (which must already have `facial_data.json`) into a pose data session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the face data files. An existing pose dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
@@ -108,9 +108,9 @@ sys.path.insert(0, "src")
 sys.path.insert(0, "src/analysis")
 
 from extraction.pose_extractor import extract_pose_video, load_pose_detector
-from extraction.v2_session_builder import build_payload
+from extraction.pose_builder import build_payload
 from extraction.video_frames import open_video_info
-from session_writer_v2 import write_v2_session
+from pose_writer import write_v2_session
 
 video = Path("recordings/raw/demo_person/session-001.mp4")
 session_dir = Path("datasets/demo_person/session-001")
