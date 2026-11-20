@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from api import catalog, face_data, hand_data, job_events, jobs, manage, pose_data, system
+from api import catalog, face_data, hand_data, job_events, jobs, manage, pose_data, system, video_data
 from api.catalog import ApiError
 
 
@@ -275,6 +275,26 @@ async def job_progress_events(job_id: str):
         raise ApiError("not_found", "job not found", 404)
     return StreamingResponse(job_events.event_stream(job_id), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+# ---- phase H8: native video playback (read-only, local requests only) ------------------------
+
+@app.get("/api/persons/{person}/sessions/{session}/video", dependencies=[Depends(video_data.local_only)])
+def session_video(person: str, session: str):
+    path = video_data.recording_path(person, session)
+    return FileResponse(path, media_type="video/mp4", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/landmarks/window", dependencies=[Depends(video_data.local_only)])
+def landmark_window(person: str, session: str, start: int = 0, count: int = video_data.WINDOW_DEFAULT):
+    data = video_data.build_window(person, session, start, count)
+    return Response(content=data, media_type=f"application/vnd.facial-analysis.landmark-window; version={video_data.FORMAT_VERSION}",
+                    headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/persons/{person}/sessions/{session}/video/timing", dependencies=[Depends(video_data.local_only)])
+def video_timing(person: str, session: str):
+    return video_data.timing_check(person, session)
 
 
 # ---- phase H5: hand motion data (read-only) -------------------------------------------------
