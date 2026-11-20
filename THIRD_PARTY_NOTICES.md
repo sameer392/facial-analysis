@@ -74,3 +74,10 @@ recording, photograph or biometric sample, and they carry no third-party license
 
 The images in `docs/screenshots/` were captured from the dashboard running on the synthetic
 demo data. They contain no real faces or recordings.
+
+## Web app chart packages
+
+The Next.js web app draws its charts and the 3D view with two packages, pinned to exact versions in `web/package.json`:
+
+- `echarts` 6.1.0, Apache License 2.0
+- `echarts-gl` 2.1.0, MIT License (adds the 3D grid and 3D points used on the 3D page)

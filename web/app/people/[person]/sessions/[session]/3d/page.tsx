@@ -1,5 +1,6 @@
 "use client";
 
+import "echarts-gl";
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -11,6 +12,7 @@ import { Chart } from "../../../../../components/chart";
 type View = "compensated" | "raw";
 type Mode = "off" | "points" | "wireframe" | "contours" | "hybrid";
 type Point = [number | null, number | null, number | null];
+type Xyz = { x: number; y: number; z: number };
 
 const PLAY_SPEEDS = [5, 10, 30] as const;
 const MODES: { value: Mode; label: string }[] = [
@@ -20,8 +22,9 @@ const MODES: { value: Mode; label: string }[] = [
   { value: "hybrid", label: "Points and contours" },
   { value: "off", label: "Nothing" },
 ];
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 8;
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 6;
+const BASE_DISTANCE = 220;
 
 function linesOption(time: (number | null)[], series: [string, (number | null)[]][], yName: string): EChartsOption {
   return {
@@ -40,10 +43,10 @@ function linesOption(time: (number | null)[], series: [string, (number | null)[]
 }
 
 /**
- * Turns the landmarks in 3D (yaw about the vertical axis, pitch about the horizontal axis, roll about the line
- * of sight) and projects them onto the plane. Returns one entry per landmark index, so mesh edges can be drawn.
+ * Turns the face by the chosen yaw, pitch and roll (the face itself, not the camera). Returns one entry per
+ * landmark index, so the mesh edges can be drawn between the same points.
  */
-function project(points: Point[], yawDeg: number, pitchDeg: number, rollDeg: number) {
+function turnFace(points: Point[], yawDeg: number, pitchDeg: number, rollDeg: number) {
   const valid = points.filter((p): p is [number, number, number] => p[0] != null && p[1] != null && p[2] != null);
   const cx = valid.length ? valid.reduce((a, p) => a + p[0], 0) / valid.length : 0;
   const cy = valid.length ? valid.reduce((a, p) => a + p[1], 0) / valid.length : 0;
@@ -58,20 +61,19 @@ function project(points: Point[], yawDeg: number, pitchDeg: number, rollDeg: num
   const cr = Math.cos(roll);
   const sr = Math.sin(roll);
   let extent = 0;
-  const out = points.map((p) => {
+  const out: (Xyz | null)[] = points.map((p) => {
     if (p[0] == null || p[1] == null || p[2] == null) return null;
     const x = p[0] - cx;
     const y = p[1] - cy;
     const z = p[2] - cz;
-    const x1 = x * cyw + z * syw; // yaw
+    const x1 = x * cyw + z * syw;
     const z1 = -x * syw + z * cyw;
-    const y2 = y * cpt - z1 * spt; // pitch
+    const y2 = y * cpt - z1 * spt;
     const z2 = y * spt + z1 * cpt;
-    const x3 = x1 * cr - y2 * sr; // roll
+    const x3 = x1 * cr - y2 * sr;
     const y3 = x1 * sr + y2 * cr;
-    const xy: [number, number] = [x3, -y3]; // the image's y axis points down
-    extent = Math.max(extent, Math.abs(x3), Math.abs(y3));
-    return { xy, depth: z2 };
+    extent = Math.max(extent, Math.abs(x3), Math.abs(y3), Math.abs(z2));
+    return { x: x3, y: -y3, z: z2 }; // the image's y axis points down
   });
   return { out, extent };
 }
@@ -84,6 +86,8 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
   const [yaw, setYaw] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [roll, setRoll] = useState(0);
+  const [camAlpha, setCamAlpha] = useState(15);
+  const [camBeta, setCamBeta] = useState(-20);
   const [zoom, setZoom] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState<(typeof PLAY_SPEEDS)[number]>(10);
@@ -115,7 +119,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
     return () => window.clearInterval(id);
   }, [playing, frames, fps]);
 
-  // Mouse: drag to turn; the wheel zooms. Native listeners, so the wheel can be stopped from scrolling the page.
+  // Mouse: drag to turn the camera around the face; the wheel zooms. Native listeners, so the wheel does not scroll the page.
   useEffect(() => {
     const el = plotEl;
     if (!el) return;
@@ -129,8 +133,8 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
       const dx = e.clientX - last.x;
       const dy = e.clientY - last.y;
       last = { x: e.clientX, y: e.clientY };
-      setYaw((v) => Math.max(-180, Math.min(180, v + dx * 0.5)));
-      setPitch((v) => Math.max(-90, Math.min(90, v + dy * 0.5)));
+      setCamBeta((v) => Math.max(-180, Math.min(180, v + dx * 0.5)));
+      setCamAlpha((v) => Math.max(-90, Math.min(90, v + dy * 0.5)));
     };
     const up = () => {
       last = null;
@@ -167,67 +171,100 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
     return linesOption(pose.data.time_s, [["depth span", pose.data.depth_range]], "relative depth");
   }, [pose.data]);
 
-  const projection = useMemo<EChartsOption | null>(() => {
+  const option = useMemo<EChartsOption | null>(() => {
     const points = (landmarks.data?.points ?? []) as Point[];
-    const { out, extent } = project(points, yaw, pitch, roll);
+    const { out, extent } = turnFace(points, yaw, pitch, roll);
     if (!out.some((p) => p !== null)) return null;
-    const depths = out.filter((p): p is { xy: [number, number]; depth: number } => p !== null).map((p) => p.depth);
-    const bound = (extent || 1) * 1.1 / zoom;
+    const bound = (extent || 1) * 1.1;
+    const depths = out.filter((p): p is Xyz => p !== null).map((p) => p.z);
+    const showPoints = mode === "points" || mode === "hybrid";
 
-    const series: EChartsOption["series"] = [];
-    const edgeLines = (edges: number[][], colour: string, opacity: number, width: number) => ({
-      type: "lines" as const,
-      coordinateSystem: "cartesian2d" as const,
+    // Each mesh edge is drawn as a row of small 3D points between its two landmarks. The points are placed in 3D,
+    // so they turn with the face. Edges with a missing end are skipped.
+    const STEPS = 6;
+    const edgeDots = (edges: number[][], colour: string, opacity: number, size: number) => ({
+      type: "scatter3D",
       silent: true,
-      lineStyle: { color: colour, opacity, width },
+      symbolSize: size,
+      itemStyle: { color: colour, opacity },
       data: edges.flatMap(([a, b]) => {
         const pa = out[a];
         const pb = out[b];
-        return pa && pb ? [{ coords: [pa.xy, pb.xy] }] : [];
+        if (!pa || !pb) return [];
+        const dots: number[][] = [];
+        for (let s = 0; s <= STEPS; s++) {
+          const t = s / STEPS;
+          dots.push([pa.x + (pb.x - pa.x) * t, pa.y + (pb.y - pa.y) * t, pa.z + (pb.z - pa.z) * t]);
+        }
+        return dots;
       }),
     });
-    if (mode === "wireframe" && topology.data) {
-      series.push(edgeLines(topology.data.mesh.edges, topology.data.mesh.colour, 0.55, 1));
-    }
-    if (mode === "hybrid" && topology.data) {
-      series.push(edgeLines(topology.data.mesh.edges, topology.data.mesh.colour, 0.2, 1));
-    }
+
+    const series: Record<string, unknown>[] = [];
+    if (mode === "wireframe" && topology.data) series.push(edgeDots(topology.data.mesh.edges, topology.data.mesh.colour, 0.7, 1.5));
+    if (mode === "hybrid" && topology.data) series.push(edgeDots(topology.data.mesh.edges, topology.data.mesh.colour, 0.25, 1));
     if ((mode === "contours" || mode === "hybrid") && topology.data) {
       for (const region of Object.values(topology.data.regions)) {
-        series.push(edgeLines(region.edges, region.colour, 0.9, 1.5));
+        series.push(edgeDots(region.edges, region.colour, 0.95, 2));
       }
     }
-    const showPoints = mode === "points" || mode === "hybrid";
     if (showPoints) {
       series.push({
-        type: "scatter",
+        type: "scatter3D",
         symbolSize: 3,
-        data: out.flatMap((p) => (p ? [[p.xy[0], p.xy[1], p.depth]] : [])),
+        data: out.flatMap((p) => (p ? [[p.x, p.y, p.z]] : [])),
       });
     }
 
-    return {
+    // No axes, tick labels or box: only the face is shown.
+    const axis = {
+      type: "value",
+      min: -bound,
+      max: bound,
+      show: false,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { show: false },
+      splitLine: { show: false },
+      axisPointer: { show: false },
+    };
+    const spec = {
       animation: false,
-      grid: { left: 20, right: 80, top: 20, bottom: 20 },
-      xAxis: { type: "value", show: false, min: -bound, max: bound },
-      yAxis: { type: "value", show: false, min: -bound, max: bound },
-      // The depth colour scale is only for the points. Without points it is left out, so the lines keep their colour.
-      visualMap: showPoints ? {
-        show: true,
-        seriesIndex: series.length - 1,
-        dimension: 2,
-        min: Math.min(...depths),
-        max: Math.max(...depths),
-        orient: "vertical",
-        right: 0,
-        top: "center",
-        text: ["near", "far"],
-        calculable: false,
-        inRange: { color: ["#1d4ed8", "#a3a3a3", "#dc2626"] },
-      } : undefined,
+      grid3D: {
+        show: false,
+        boxWidth: 100,
+        boxHeight: 100,
+        boxDepth: 100,
+        viewControl: {
+          projection: "perspective",
+          alpha: camAlpha,
+          beta: camBeta,
+          distance: BASE_DISTANCE / zoom,
+          // The camera is driven by the controls on this page, so the built-in mouse handling is turned off.
+          rotateSensitivity: 0,
+          zoomSensitivity: 0,
+          panSensitivity: 0,
+          autoRotate: false,
+        },
+        light: { main: { intensity: 1.1, shadow: false }, ambient: { intensity: 0.35 } },
+      },
+      xAxis3D: axis,
+      yAxis3D: axis,
+      zAxis3D: axis,
+      visualMap: showPoints
+        ? {
+            show: false,
+            dimension: 2,
+            seriesIndex: series.length - 1,
+            min: Math.min(...depths),
+            max: Math.max(...depths),
+            inRange: { color: ["#1d4ed8", "#a3a3a3", "#dc2626"] },
+          }
+        : undefined,
       series,
     };
-  }, [landmarks.data, yaw, pitch, roll, zoom, mode, topology.data]);
+    return spec as unknown as EChartsOption;
+  }, [landmarks.data, yaw, pitch, roll, camAlpha, camBeta, zoom, mode, topology.data]);
 
   const angleAt = (values: (number | null)[] | undefined) => {
     const v = values?.[frame];
@@ -242,8 +279,8 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
         </p>
         <h1 className="text-2xl font-semibold">3D facial landmarks</h1>
         <p className="text-sm text-[var(--muted)]">
-          Drag the plot to turn the face, and use the wheel to zoom. The view stays where you put it while the frames change.
-          It is a 3D projection drawn on a plane, not a full 3D model.
+          Drag the picture to turn it in 3D, and use the wheel or the + and − buttons to zoom. The view stays where you put
+          it while the frames change.
         </p>
       </header>
 
@@ -316,7 +353,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
       {landmarks.data ? (
         <Card title={`Landmarks, frame ${frame} (${view === "compensated" ? "head-pose compensated" : "raw"})`}>
           <div className="mb-3 grid gap-3 text-sm md:grid-cols-6">
-            <label className="flex flex-col gap-1 md:col-span-1">
+            <label className="flex flex-col gap-1">
               Show
               <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}
                 className="rounded border border-[var(--border)] bg-transparent px-2 py-1">
@@ -324,15 +361,15 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              Turn left-right: {yaw.toFixed(0)}°
+              Face turn (left-right): {yaw.toFixed(0)}°
               <input type="range" min={-180} max={180} value={yaw} onChange={(e) => setYaw(Number(e.target.value))} />
             </label>
             <label className="flex flex-col gap-1">
-              Tilt up-down: {pitch.toFixed(0)}°
+              Face tilt (up-down): {pitch.toFixed(0)}°
               <input type="range" min={-90} max={90} value={pitch} onChange={(e) => setPitch(Number(e.target.value))} />
             </label>
             <label className="flex flex-col gap-1">
-              Roll: {roll.toFixed(0)}°
+              Face roll: {roll.toFixed(0)}°
               <input type="range" min={-180} max={180} value={roll} onChange={(e) => setRoll(Number(e.target.value))} />
             </label>
             <div className="flex items-end gap-2">
@@ -342,20 +379,25 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
                 className="rounded border border-[var(--border)] px-3 py-1">−</button>
             </div>
             <div className="flex items-end">
-              <button type="button" onClick={() => { setYaw(0); setPitch(0); setRoll(0); setZoom(1); }}
-                className="rounded border border-[var(--border)] px-3 py-1">Reset view</button>
+              <button
+                type="button"
+                onClick={() => { setYaw(0); setPitch(0); setRoll(0); setCamAlpha(15); setCamBeta(-20); setZoom(1); }}
+                className="rounded border border-[var(--border)] px-3 py-1"
+              >
+                Reset view
+              </button>
             </div>
           </div>
-          {projection ? (
+          {option ? (
             <div ref={setPlotEl} className="cursor-grab touch-none select-none active:cursor-grabbing">
-              <Chart option={projection} height={460} label={`Landmarks for frame ${frame}`} />
+              <Chart option={option} height={480} label={`3D landmarks for frame ${frame}`} />
             </div>
           ) : (
             <p className="text-sm text-[var(--muted)]">No face was tracked in frame {frame}.</p>
           )}
           <p className="mt-2 text-xs text-[var(--muted)]">
-            Drag to turn, wheel to zoom ({zoom.toFixed(2)}×). Points are coloured by depth: red is nearer, blue is further.
-            The mesh and contours use MediaPipe's own connections, the same as the Overlay page.
+            Drag to turn ({camBeta.toFixed(0)}°, {camAlpha.toFixed(0)}°), wheel to zoom ({zoom.toFixed(2)}×). Points are coloured by
+            depth: red is nearer, blue is further. The mesh and contours use MediaPipe&apos;s own connections, as on the Overlay page.
           </p>
         </Card>
       ) : landmarks.isPending && pose.isSuccess ? (
