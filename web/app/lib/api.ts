@@ -149,7 +149,7 @@ function get<T>(path: string): Promise<T> {
   return request<T>("GET", path);
 }
 
-export type JobKind = "pose_build" | "face_extract" | "face_analyse";
+export type JobKind = "face_build" | "pose_build" | "face_extract" | "face_analyse";
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
 

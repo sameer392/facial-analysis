@@ -7,16 +7,21 @@ import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 
 const TOKEN_KEY = "facial.apiToken";
 
+// Jobs offered on this page. Older single-step jobs still show their names in the job list.
+const OFFERED: JobKind[] = ["face_build", "pose_build"];
+
 const KIND_LABEL: Record<JobKind, string> = {
-  face_extract: "Face extraction",
-  face_analyse: "Face analysis outputs",
-  pose_build: "Pose build",
+  face_build: "Face data",
+  pose_build: "Pose data",
+  face_extract: "Face extraction (older job)",
+  face_analyse: "Face analysis outputs (older job)",
 };
 
 const KIND_HELP: Record<JobKind, string> = {
+  face_build: "Reads the recording and writes the face data: landmarks, blendshapes and motion measures. Never overwrites existing face data. Progress is per frame, then per stage.",
+  pose_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
   face_extract: "Reads the recording and writes the face data and frames. Never overwrites existing data. Progress is per frame.",
   face_analyse: "Writes the blendshape table and motion outputs from existing face data. Replacing needs the box ticked.",
-  pose_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -66,7 +71,7 @@ function errorText(error: unknown): { message: string; code?: string } {
 export default function JobsPage() {
   const queryClient = useQueryClient();
   const [token, saveToken, tokenLoaded] = useApiToken();
-  const [kind, setKind] = useState<JobKind>("face_extract");
+  const [kind, setKind] = useState<JobKind>("face_build");
   const [person, setPerson] = useState("");
   const [session, setSession] = useState("");
   const [regenerate, setRegenerate] = useState(false);
@@ -85,7 +90,7 @@ export default function JobsPage() {
 
   // Which sessions each kind can start on, following the script rules. The server checks again.
   const eligible = (layout: string) => {
-    if (kind === "face_extract") return layout === "none";
+    if (kind === "face_build" || kind === "face_extract") return layout === "none";
     return layout === "face" || layout === "pose";
   };
   const startable = (sessions.data ?? []).filter((s) => s.has_video && eligible(s.layout));
@@ -159,7 +164,7 @@ export default function JobsPage() {
               value={kind}
               onChange={(e) => { setKind(e.target.value as JobKind); setSession(""); setRegenerate(false); }}
             >
-              {(Object.keys(KIND_LABEL) as JobKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+              {OFFERED.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm">

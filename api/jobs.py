@@ -6,7 +6,8 @@ by those scripts, never by this module.
 
 Kinds:
   pose_build     src/extraction/build_pose_session.py  (pose data; --regenerate replaces it)
-  face_extract   src/analysis/extract_faces.py        (face data; refuses existing data, no regenerate)
+  face_build     src/analysis/build_face_data.py      (face data: extraction then analysis; refuses existing data)
+  face_extract   src/analysis/extract_faces.py        (face data extraction only; refuses existing data)
   face_analyse   src/analysis/analyze_faces.py        (blendshape and motion outputs; --force regenerates)
 
 Lifecycle: queued -> running -> succeeded | failed | cancelled, and interrupted when the API restarts while a
@@ -44,10 +45,11 @@ from api.catalog import ApiError, _check_person  # noqa: E402
 from facial_analyzer import make_session, motion_output_paths  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
-KINDS = ("pose_build", "face_extract", "face_analyse")
+KINDS = ("face_build", "pose_build", "face_extract", "face_analyse")
 # Older job codes, still accepted in requests and mapped when rows are read.
 SCRIPTS = {
     "pose_build": ROOT / "src" / "extraction" / "build_pose_session.py",
+    "face_build": ROOT / "src" / "analysis" / "build_face_data.py",
     "face_extract": ROOT / "src" / "analysis" / "extract_faces.py",
     "face_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
 }
@@ -173,6 +175,15 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
             if marker in line:
                 return stage, (POSE_STAGES.index(stage) + 1) / len(POSE_STAGES)
         return None
+    if kind == "face_build":
+        # extraction is the first 80 per cent of the run, analysis the last 20
+        update = parse_progress("face_extract", line, state)
+        if update:
+            return update[0], update[1] * 0.8
+        update = parse_progress("face_analyse", line, state)
+        if update:
+            return update[0], 0.8 + update[1] * 0.2
+        return None
     if kind == "face_extract":
         m = _TOTAL_RE.match(line)
         if m:
@@ -204,7 +215,7 @@ def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
         if p.name == LOCK_FILE or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
     frames = dataset_dir / "frames"
-    if kind == "face_extract" and not (dataset_dir / "facial_data.json").exists() \
+    if kind in ("face_build", "face_extract") and not (dataset_dir / "facial_data.json").exists() \
             and frames.is_dir() and any(frames.iterdir()):
         names.append("frames/ (partly written)")
     return names
@@ -346,7 +357,7 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
             raise ApiError("no_face_data", "run the face extraction for this session first", 422)
         if session_layout(dataset) == "pose" and not regenerate:
             raise ApiError("pose_exists", "pose data already exists; set regenerate to replace it", 409)
-    elif kind == "face_extract":
+    elif kind in ("face_build", "face_extract"):
         frames = dataset / "frames"
         if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):
             raise ApiError("face_data_exists", "face data already exists; extraction never overwrites it", 409)
