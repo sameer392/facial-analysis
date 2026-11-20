@@ -72,14 +72,14 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
         <p className="text-sm text-[var(--muted)]">
           <Link href={`/people/${encodeURIComponent(person)}`} className="underline">{person}</Link> / {session}
         </p>
-        <h1 className="text-2xl font-semibold">Body motion (V2 pose)</h1>
+        <h1 className="text-2xl font-semibold">Body motion</h1>
         <p className="text-sm text-[var(--muted)]">
           Existing Pose Landmarker output. Tracking figures only; they do not measure the accuracy of the motion.
           Nothing is generated here.
         </p>
       </header>
 
-      {info.isPending ? <Loading label="Checking V2 data…" /> : null}
+      {info.isPending ? <Loading label="Checking pose data…" /> : null}
       {info.isError ? <ErrorState message={info.error.message} code={(info.error as { code?: string }).code} /> : null}
 
       {info.data && frames > 0 ? (

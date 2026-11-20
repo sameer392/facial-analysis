@@ -335,20 +335,20 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
 
     if kind == "v2_build":
         if not (dataset / "facial_data.json").is_file():
-            raise ApiError("no_v1_data", "run the version 1 extraction for this session first", 422)
+            raise ApiError("no_v1_data", "run the face extraction for this session first", 422)
         if session_layout(dataset) == "v2" and not regenerate:
-            raise ApiError("v2_exists", "a complete V2 dataset exists; set regenerate to replace it", 409)
+            raise ApiError("v2_exists", "pose data already exists; set regenerate to replace it", 409)
     elif kind == "v1_extract":
         frames = dataset / "frames"
         if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):
-            raise ApiError("v1_exists", "version 1 data already exists; extraction never overwrites it", 409)
+            raise ApiError("v1_exists", "face data already exists; extraction never overwrites it", 409)
         try:
             verify_model(get_spec("face"))
         except Exception as exc:  # missing or changed model file: refuse, never load it
             raise ApiError("model_integrity", f"the face model failed its check: {exc}", 503) from None
     elif kind == "v1_analyse":
         if not (dataset / "facial_data.json").is_file():
-            raise ApiError("no_v1_data", "run the version 1 extraction for this session first", 422)
+            raise ApiError("no_v1_data", "run the face extraction for this session first", 422)
         outputs = [dataset / "facial_blendshapes.csv", *motion_output_paths(make_session(person, session))]
         existing = [p.name for p in outputs if p.exists()]
         if existing and not regenerate:

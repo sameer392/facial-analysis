@@ -63,9 +63,9 @@ def _v2_dir(person: str, session: str) -> Path:
     folder = pp.session_dataset_dir(person, session)
     layout = session_layout(folder)
     if layout == "incomplete_v2":
-        raise ApiError("incomplete_v2", "V2 output is incomplete (metadata.json missing or unreadable)", 409)
+        raise ApiError("incomplete_v2", "pose data is incomplete (metadata.json missing or unreadable)", 409)
     if layout != "v2":
-        raise ApiError("no_v2_data", "no V2 Pose data for this session", 404)
+        raise ApiError("no_v2_data", "no pose data for this session", 404)
     return folder
 
 

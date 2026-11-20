@@ -22,7 +22,7 @@ export default function OverviewPage() {
           {health.data ? (
             <div className="flex flex-col gap-2 text-sm">
               <Badge tone="good">{health.data.status}</Badge>
-              <p>API {health.data.api_version} · schema {health.data.schema_version}</p>
+              <p>API {health.data.api_version}</p>
               <p className="text-[var(--muted)]">Data root: {health.data.data_root}</p>
               <p className="text-[var(--muted)]">{health.data.read_only ? "Read-only" : "Writable"}</p>
             </div>
@@ -34,7 +34,7 @@ export default function OverviewPage() {
           {persons.data ? <p className="text-3xl font-semibold">{persons.data.length}</p> : null}
         </Card>
         <Card title="Phase">
-          <p className="text-sm">P4: read-only analysis pages, plus V2 build jobs with the API token.</p>
+          <p className="text-sm">Read-only analysis pages, and jobs for face and pose data with the API token.</p>
           <p className="mt-2 text-sm text-[var(--muted)]">Uploads and deletes are not yet implemented.</p>
         </Card>
       </div>

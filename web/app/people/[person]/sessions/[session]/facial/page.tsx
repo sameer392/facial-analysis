@@ -73,7 +73,7 @@ export default function FacialPage({ params }: { params: Promise<{ person: strin
         </p>
         <h1 className="text-2xl font-semibold">Facial analysis</h1>
         <p className="text-sm text-[var(--muted)]">
-          Tracking figures and motion values from the version 1 analysis. Tracking figures do not measure motion accuracy.
+          Tracking figures and motion values from the face analysis. Tracking figures do not measure motion accuracy.
         </p>
       </header>
 

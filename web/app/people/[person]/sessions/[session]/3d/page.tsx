@@ -94,7 +94,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
         </p>
         <h1 className="text-2xl font-semibold">3D facial landmarks</h1>
         <p className="text-sm text-[var(--muted)]">
-          Landmarks and head pose from the version 1 analysis. The frame view is a projection: horizontal and vertical
+          Landmarks and head pose from the face analysis. The frame view is a projection: horizontal and vertical
           position with depth as colour. It is not a rotatable 3D model.
         </p>
       </header>

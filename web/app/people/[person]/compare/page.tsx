@@ -70,7 +70,7 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
 
       {sessions.isPending ? <Loading label="Loading sessions…" /> : null}
       {sessions.isError ? <ErrorState message={sessions.error.message} /> : null}
-      {sessions.data && v1Sessions.length === 0 ? <Empty title="No analysed sessions" detail="Only sessions with version 1 facial data can be compared." /> : null}
+      {sessions.data && v1Sessions.length === 0 ? <Empty title="No analysed sessions" detail="Only sessions with face data can be compared." /> : null}
 
       <Card title="Sessions to compare">
         <fieldset className="flex flex-wrap gap-4 text-sm">

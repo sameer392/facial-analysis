@@ -8,15 +8,15 @@ import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 const TOKEN_KEY = "facial.apiToken";
 
 const KIND_LABEL: Record<JobKind, string> = {
-  v1_extract: "V1 face extraction",
-  v1_analyse: "V1 analysis outputs",
-  v2_build: "V2 Pose build",
+  v1_extract: "Face extraction",
+  v1_analyse: "Face analysis outputs",
+  v2_build: "Pose build",
 };
 
 const KIND_HELP: Record<JobKind, string> = {
-  v1_extract: "Reads the recording and writes the version 1 face data and frames. Never overwrites existing data. Progress is per frame.",
-  v1_analyse: "Writes the blendshape table and motion outputs from existing version 1 data. Replacing needs the box ticked.",
-  v2_build: "Writes the version 2 Pose data from the recording. Needs version 1 data first. Replacing needs the box ticked.",
+  v1_extract: "Reads the recording and writes the face data and frames. Never overwrites existing data. Progress is per frame.",
+  v1_analyse: "Writes the blendshape table and motion outputs from existing face data. Replacing needs the box ticked.",
+  v2_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -126,7 +126,7 @@ export default function JobsPage() {
       <header>
         <h1 className="text-2xl font-semibold">Jobs</h1>
         <p className="text-sm text-[var(--muted)]">
-          Start a version 2 Pose build for a recording. The build runs the existing command-line code in its own
+          Start a pose build for a recording. The build runs the existing command-line code in its own
           process. Progress is shown per stage, not per frame. Starting and cancelling need the API token.
         </p>
       </header>
@@ -150,7 +150,7 @@ export default function JobsPage() {
         </div>
       </Card>
 
-      <Card title="Start a V2 build">
+      <Card title="Start a job">
         <form onSubmit={onStart} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <label className="flex flex-col gap-1 text-sm">
             Job
@@ -184,7 +184,7 @@ export default function JobsPage() {
               <option value="">Choose a session</option>
               {startable.map((s) => (
                 <option key={s.session_id} value={s.session_id}>
-                  {s.session_id}{s.layout === "v2" ? " (V2 exists)" : s.layout === "v1" ? " (V1 exists)" : ""}
+                  {s.session_id}{s.layout === "v2" ? " (pose data exists)" : s.layout === "v1" ? " (face data exists)" : ""}
                 </option>
               ))}
             </select>
@@ -193,7 +193,7 @@ export default function JobsPage() {
             {isRegeneration ? (
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} />
-                {kind === "v2_build" ? "Replace the existing V2 data" : "Replace the existing analysis outputs"}
+                {kind === "v2_build" ? "Replace the existing pose data" : "Replace the existing analysis outputs"}
               </label>
             ) : null}
             <button

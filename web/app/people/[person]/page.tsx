@@ -7,9 +7,9 @@ import { api } from "../../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../../components/ui";
 
 const LAYOUT_LABEL: Record<string, string> = {
-  v1: "Version 1",
-  v2: "Version 2",
-  incomplete_v2: "Incomplete V2",
+  v1: "Face data",
+  v2: "Pose data",
+  incomplete_v2: "Pose data incomplete",
   none: "No dataset yet",
 };
 

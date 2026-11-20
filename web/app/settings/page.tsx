@@ -26,7 +26,6 @@ export default function SettingsPage() {
             <div><dt className="text-[var(--muted)]">Model folder</dt><dd className="font-mono">{settings.data.model_folder}</dd></div>
             <div><dt className="text-[var(--muted)]">API address</dt><dd className="font-mono">{settings.data.bind_address}</dd></div>
             <div><dt className="text-[var(--muted)]">API version</dt><dd>{settings.data.api_version}</dd></div>
-            <div><dt className="text-[var(--muted)]">Dataset schema</dt><dd>{settings.data.schema_version}</dd></div>
             <div><dt className="text-[var(--muted)]">Python</dt><dd>{settings.data.python_version} ({settings.data.platform})</dd></div>
           </dl>
         ) : null}

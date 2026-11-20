@@ -134,7 +134,7 @@ LAYERS = {
         "title": "Hand tracking",
         "extractor": "src/extraction/hand_extractor.py",
         "will_show": "Hand landmarks (21 per hand) aligned to each session's frames, from the Hand Landmarker model.",
-        "needed": "A hand extractor that writes hand landmarks and visibility into the V2 hands/ folder, plus the "
+        "needed": "A hand extractor that writes hand landmarks and visibility into the hands folder of the pose data, plus the "
                   "validation and viewer code that reads them. The Hand Landmarker model is registered and checked on the Models page.",
     },
 }

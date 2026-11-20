@@ -5,6 +5,13 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 
+const LAYOUT_NAME: Record<string, string> = {
+  v1: "face data",
+  v2: "pose data",
+  incomplete_v2: "pose data incomplete",
+  none: "no data",
+};
+
 export default function RecordingsPage() {
   const persons = useQuery({ queryKey: ["persons"], queryFn: api.persons });
   const sessionQueries = useQueries({
@@ -39,7 +46,7 @@ export default function RecordingsPage() {
                 </Link>
                 <span className="flex gap-2">
                   {r.has_video ? <Badge tone="good">video</Badge> : <Badge>no video</Badge>}
-                  <Badge tone={r.layout === "v2" ? "good" : "neutral"}>{r.layout}</Badge>
+                  <Badge tone={r.layout === "v2" ? "good" : "neutral"}>{LAYOUT_NAME[r.layout] ?? r.layout}</Badge>
                 </span>
               </li>
             ))}
