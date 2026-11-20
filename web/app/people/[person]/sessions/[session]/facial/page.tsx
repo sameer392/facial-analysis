@@ -188,6 +188,34 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
     ]);
   }, [series.data]);
 
+  const blinkOption = useMemo<EChartsOption | null>(() => {
+    if (!series.data || !blinks.data) return null;
+    const periods = blinks.data
+      .filter((b) => b.start_s != null && b.duration_ms != null)
+      .map((b) => [
+        { xAxis: b.start_s as number },
+        { xAxis: (b.start_s as number) + (b.duration_ms as number) / 1000 },
+      ]);
+    return {
+      tooltip: { trigger: "axis" },
+      legend: { top: 0 },
+      grid: { left: 50, right: 20, top: 40, bottom: 40 },
+      xAxis: { type: "value", name: "time (s)" },
+      yAxis: { type: "value", min: 0, max: 1, name: "eye blink score" },
+      series: [{
+        name: "eye blink",
+        type: "line",
+        showSymbol: false,
+        data: series.data.eye_blink.map((v, i): [number | null, number | null] => [series.data!.time_s[i], typeof v === "number" ? v : null]),
+        markArea: {
+          silent: true,
+          itemStyle: { color: "rgba(220, 38, 38, 0.18)" },
+          data: periods as never,
+        },
+      }],
+    };
+  }, [series.data, blinks.data]);
+
   const headOption = useMemo<EChartsOption | null>(() => {
     if (!series.data) return null;
     return lineOption(series.data.time_s, [
@@ -334,6 +362,11 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
         {expressionOption ? (
           <Card title="Mouth and eye blendshapes">
             <Chart option={expressionOption} label="Mouth and eye blendshapes over time" />
+          </Card>
+        ) : null}
+        {blinkOption ? (
+          <Card title="Blink timeline (shaded periods are detected blinks)">
+            <Chart option={blinkOption} label="Eye blink score with detected blinks marked" />
           </Card>
         ) : null}
         <Card title="Blink events">
