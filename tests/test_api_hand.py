@@ -173,10 +173,14 @@ class JobTests(JobCase):
         self.assertEqual(job["state"], "failed")
 
     def test_second_job_for_the_same_session_is_refused(self):
-        self.make_session()
-        self.create_job(self.body())
-        status, body = js("POST", "/api/jobs", body=self.body(), token=TOKEN)
-        self.assertEqual((status, body["code"]), (409, "job_active"))
+        # session-003 uses the fake worker that keeps running until cancelled. session-001 finishes at once, so a
+        # second request could race it and be accepted (202) once the first job had already succeeded.
+        self.make_session(session="session-003")
+        first = self.create_job(self.body(session="session-003"))
+        self.assertIn(self.svc.store.get(first["id"])["state"], jobs.ACTIVE, "the first job must still be active")
+        status, body = js("POST", "/api/jobs", body=self.body(session="session-003"), token=TOKEN)
+        self.assertEqual(status, 409, f"second job was not refused: {body}")
+        self.assertEqual(body["code"], "job_active")
 
     def test_cancelling_a_running_job(self):
         self.make_session(session="session-003")
