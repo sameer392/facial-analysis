@@ -10,6 +10,7 @@ All notable changes to this project are recorded here. The format follows
 - `src/dashboard/` renamed to `src/viewer/`: `overlay.py` and `pose_viewer.py` are the framework-free helpers the API uses.
 
 ### Added
+- Hand Motion Analysis, phase H1 (branch `hand-motion`): hand detection and 21-point landmark extraction with MediaPipe Hand Landmarker, normalised and world coordinates kept separately, and a per-frame hand status file. Written into the hands stream of the pose data session by `src/extraction/build_hand_session.py`. Tracking, gestures, API and frontend are not yet implemented.
 - Compare people page (`/compare`): compare sessions from several people. `GET /api/comparison?items=person/session,...`.
 - Interruptions chart and blink timeline on the Face analysis page.
 - Blendshape values for the selected frame, movement by region, blendshape CSV download, landmark coordinate tables, and the 3D coordinates table.

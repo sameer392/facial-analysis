@@ -57,6 +57,28 @@ TIMESTAMP_SOURCES = ("decoded_pts", "fps_derived")
 STREAM_STATUSES = ("complete", "partial", "absent", "failed")
 STREAMS = ("facial", "body", "hands")
 
+# Hand Landmarker topology: MediaPipe's standard 21 points, in model order.
+HAND_LANDMARK_NAMES = (
+    "wrist",
+    "thumb_cmc", "thumb_mcp", "thumb_ip", "thumb_tip",
+    "index_mcp", "index_pip", "index_dip", "index_tip",
+    "middle_mcp", "middle_pip", "middle_dip", "middle_tip",
+    "ring_mcp", "ring_pip", "ring_dip", "ring_tip",
+    "pinky_mcp", "pinky_pip", "pinky_dip", "pinky_tip",
+)
+
+# Per-frame status of each hand side. Only "valid", "low_confidence" and "outside_frame" have finite landmarks.
+# "not_detected", "unassigned" (a hand was found but its side was ambiguous) and "not_processed" rows are all NaN.
+HAND_STATUS_FILE = "hands/hand_status.csv"
+HAND_SIDE_STATUSES = ("not_processed", "not_detected", "unassigned", "valid", "low_confidence", "outside_frame")
+HAND_DETECTED_STATUSES = ("valid", "low_confidence", "outside_frame")
+HAND_STATUS_COLUMNS = (
+    "frame", "timestamp_ms",
+    "left_status", "left_score", "left_outside_landmarks", "left_world_available",
+    "right_status", "right_score", "right_outside_landmarks", "right_world_available",
+    "unassigned_hands",
+)
+
 HANDEDNESS_COLUMNS = (
     "frame", "timestamp_ms",
     "left_detected", "left_model_label", "left_score",
@@ -89,7 +111,8 @@ ARRAY_SPECS = (
     ArraySpec("hands/right_hand.npy", (N_HAND_LANDMARKS, len(HAND_CHANNELS))),
 )
 
-# Optional when the model provides world coordinates for hands.
+# Hand world coordinates (metres). Written with the hand stream; NaN where the model gave none,
+# and hand_status.csv says whether they were available.
 OPTIONAL_ARRAY_SPECS = (
     ArraySpec("hands/left_hand_world.npy", (N_HAND_LANDMARKS, len(HAND_CHANNELS)), required=False),
     ArraySpec("hands/right_hand_world.npy", (N_HAND_LANDMARKS, len(HAND_CHANNELS)), required=False),
@@ -176,6 +199,49 @@ def validate_handedness_rows(rows: list[dict]) -> list[str]:
                     issues.append(f"frame {i}: {side} hand score missing or outside 0..1")
             elif score not in (None, "") and not (isinstance(score, float) and math.isnan(score)):
                 issues.append(f"frame {i}: {side} hand score present although the hand was not detected")
+    return issues
+
+
+def validate_hand_status_rows(rows: list[dict], n_frames: int, arrays: dict) -> list[str]:
+    """Check hand_status rows, and check that the hand arrays agree with them.
+
+    A detected side must have finite landmarks; a side that was not detected or not processed must be
+    all NaN. A world array is finite only when world_available is true.
+    """
+    issues = []
+    if len(rows) != n_frames:
+        return [f"hand status has {len(rows)} rows, expected {n_frames}"]
+    for side in ("left", "right"):
+        landmarks = arrays.get(f"hands/{side}_hand.npy")
+        world = arrays.get(f"hands/{side}_hand_world.npy")
+        for i, row in enumerate(rows):
+            status = row.get(f"{side}_status")
+            if status not in HAND_SIDE_STATUSES:
+                issues.append(f"frame {i}: {side} status {status!r} is not allowed")
+                break
+            score = row.get(f"{side}_score")
+            has_score = score is not None and not (isinstance(score, float) and math.isnan(score))
+            if status in HAND_DETECTED_STATUSES:
+                if not has_score or not (0.0 <= float(score) <= 1.0):
+                    issues.append(f"frame {i}: {side} hand has no valid score")
+                    break
+            elif has_score:
+                issues.append(f"frame {i}: {side} score present although the hand is {status}")
+                break
+            world_flag = row.get(f"{side}_world_available")
+            if world_flag not in (True, False):
+                issues.append(f"frame {i}: {side}_world_available must be true or false")
+                break
+            if landmarks is not None and landmarks.shape[0] == n_frames:
+                finite = bool(np.all(np.isfinite(landmarks[i])))
+                if (status in HAND_DETECTED_STATUSES) != finite:
+                    issues.append(f"frame {i}: {side} landmarks do not match status {status}")
+                    break
+            if world is not None and world.shape[0] == n_frames:
+                world_finite = bool(np.all(np.isfinite(world[i])))
+                if world_flag != world_finite:
+                    issues.append(f"frame {i}: {side} world coordinates do not match world_available")
+                    break
     return issues
 
 
