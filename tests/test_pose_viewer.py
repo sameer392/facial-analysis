@@ -19,13 +19,13 @@ import v2_viewer as vv  # noqa: E402
 import session_writer_v2 as w  # noqa: E402
 import schema_v2 as s2  # noqa: E402
 import project_paths as pp  # noqa: E402
-import test_session_writer_v2 as tsw  # noqa: E402  (synthetic V2 payload)
+import test_pose_writer as tsw  # noqa: E402  (synthetic V2 payload)
 
 N = 8
 W, H = 64, 48
 
 
-def write_v2(session_dir: Path, pose=None, seed=0) -> Path:
+def write_pose(session_dir: Path, pose=None, seed=0) -> Path:
     """Write a valid synthetic V2 session through the real writer, with optional pose overrides."""
     payload = tsw.make_payload(n=N, seed=seed)
     if pose is not None:
@@ -57,15 +57,15 @@ class DiscoveryTests(unittest.TestCase):
         pp.DATASETS_ROOT = self._orig
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_valid_v2_session_is_discovered(self):
-        write_v2(self.root / "demo_person" / "session-001")
+    def test_valid_pose_session_is_discovered(self):
+        write_pose(self.root / "demo_person" / "session-001")
         valid, rejected = vv.discover_v2_sessions(self.root)
         self.assertEqual([(v.person, v.session_id) for v in valid], [("demo_person", "session-001")])
         self.assertEqual(rejected, [])
         self.assertEqual(valid[0].frames, N)
         self.assertEqual((valid[0].width, valid[0].height), (W, H))
 
-    def test_version_one_only_session_is_not_a_v2_session(self):
+    def test_face_data_only_session_is_not_a_pose_session(self):
         session = self.root / "demo_person" / "session-002"
         session.mkdir(parents=True)
         (session / "facial_data.json").write_text("[]", encoding="utf-8")
@@ -73,9 +73,9 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(valid, [])
         self.assertEqual(rejected, [])
 
-    def test_incomplete_v2_session_is_rejected_with_reason(self):
+    def test_incomplete_pose_session_is_rejected_with_reason(self):
         session = self.root / "demo_person" / "session-003"
-        write_v2(session)
+        write_pose(session)
         (session / "metadata.json").unlink()
         valid, rejected = vv.discover_v2_sessions(self.root)
         self.assertEqual(valid, [])
@@ -83,14 +83,14 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("incomplete", rejected[0][1])
 
     def test_tampered_file_is_rejected(self):
-        session = write_v2(self.root / "demo_person" / "session-004")
+        session = write_pose(self.root / "demo_person" / "session-004")
         (session / "timeline.csv").write_text("changed\n", encoding="utf-8")
         valid, rejected = vv.discover_v2_sessions(self.root)
         self.assertEqual(valid, [])
         self.assertIn("manifest", rejected[0][1])
 
     def test_corrupt_metadata_is_rejected(self):
-        session = write_v2(self.root / "demo_person" / "session-005")
+        session = write_pose(self.root / "demo_person" / "session-005")
         (session / "metadata.json").write_text("{not json", encoding="utf-8")
         valid, rejected = vv.discover_v2_sessions(self.root)
         self.assertEqual(valid, [])
@@ -109,13 +109,13 @@ class ArrayAndTimelineTests(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_pose_array_shape_is_checked(self):
-        session = write_v2(self.tmp / "s")
+        session = write_pose(self.tmp / "s")
         np.save(session / "body" / "pose_landmarks.npy", np.zeros((N, 32, 5), dtype=np.float32))
         with self.assertRaisesRegex(vv.V2ViewerError, "shape"):
             vv.load_pose(session)
 
     def test_pose_array_dtype_is_checked(self):
-        session = write_v2(self.tmp / "s")
+        session = write_pose(self.tmp / "s")
         np.save(session / "body" / "pose_landmarks.npy", np.zeros((N, 33, 5), dtype=np.float64))
         with self.assertRaisesRegex(vv.V2ViewerError, "dtype"):
             vv.load_pose(session)
@@ -123,13 +123,13 @@ class ArrayAndTimelineTests(unittest.TestCase):
     def test_missing_detection_frames_are_nan_rows(self):
         pose = np.stack([pose_frame() for _ in range(N)])
         pose[3] = np.nan
-        session = write_v2(self.tmp / "s", pose=pose)
+        session = write_pose(self.tmp / "s", pose=pose)
         loaded = vv.load_pose(session)
         self.assertTrue(np.isnan(loaded[3]).all())
         self.assertTrue(np.isfinite(loaded[2]).all())
 
     def test_timeline_must_align_with_the_pose_frames(self):
-        session = write_v2(self.tmp / "s")
+        session = write_pose(self.tmp / "s")
         timeline = pd.read_csv(session / "timeline.csv").iloc[:-1]
         timeline.to_csv(session / "timeline.csv", index=False)
         with self.assertRaises(vv.V2ViewerError):
@@ -222,7 +222,7 @@ class QualityTests(unittest.TestCase):
 
 
 class ExistingDashboardTests(unittest.TestCase):
-    def test_v1_helpers_still_import_and_the_body_page_runs_without_v2_data(self):
+    def test_face_helpers_still_import_and_the_body_page_runs_without_pose_data(self):
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file(str(ROOT / "src" / "dashboard" / "pages" / "04_Body_Motion.py"), default_timeout=120)

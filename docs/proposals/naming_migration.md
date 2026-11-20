@@ -1,6 +1,6 @@
 # Proposal: remove version names from the product (naming migration)
 
-Status: Steps 0, 1 and 2 are done. Step 3 (printed output and the job parser) is done: the scripts print the new wording, and the parser reads only the new markers. Steps 4 and 5 are not started.
+Status: Steps 0 to 4 are done. Step 3 (printed output and the job parser) is done: the scripts print the new wording, and the parser reads only the new markers. Step 4 (docs and test names) is done. Step 5 (remove the old names) is not started.
 
 ## 1. Goal
 

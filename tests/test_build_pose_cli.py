@@ -22,7 +22,7 @@ from extraction import build_v2_session as cli  # noqa: E402
 from extraction import model_registry as mr  # noqa: E402
 import project_paths as pp  # noqa: E402
 import schema_v2 as s2  # noqa: E402
-import test_v2_session_builder as tvb  # noqa: E402  (synthetic V1 frames and fake detector)
+import test_pose_builder as tvb  # noqa: E402  (synthetic V1 frames and fake detector)
 
 W, H, FPS, N = 64, 48, 10, 8
 V1_NAMES = ["facial_data.json", "facial_blendshapes.csv", "motion_metrics.csv",
@@ -57,7 +57,7 @@ class CliTestCase(unittest.TestCase):
         self.dataset = pp.session_dataset_dir(self.person, self.session)
         self.dataset.mkdir(parents=True)
         import json
-        (self.dataset / "facial_data.json").write_text(json.dumps(tvb.v1_facial_frames(N)), encoding="utf-8")
+        (self.dataset / "facial_data.json").write_text(json.dumps(tvb.face_facial_frames(N)), encoding="utf-8")
         for name in V1_NAMES[1:]:
             (self.dataset / name).write_bytes(b"v1 " + name.encode())
         (self.dataset / "frames").mkdir()
@@ -85,19 +85,19 @@ class CliTestCase(unittest.TestCase):
             code = cli.main(argv, detector_factory=factory)
         return code, out.getvalue(), err.getvalue()
 
-    def v1_hashes(self):
+    def face_hashes(self):
         names = V1_NAMES + ["frames/frame_000000.jpg"]
         return {n: hashlib.sha256((self.dataset / n).read_bytes()).hexdigest() for n in names}
 
 
 class SuccessTests(CliTestCase):
-    def test_writes_a_complete_v2_session_and_leaves_v1_untouched(self):
-        before = self.v1_hashes()
+    def test_writes_a_complete_pose_session_and_leaves_face_untouched(self):
+        before = self.face_hashes()
         det = FakeDetector()
         code, out, err = self.run_cli(detector=det)
         self.assertEqual(code, 0, err)
         self.assertEqual(s2.session_layout(self.dataset), "v2")
-        self.assertEqual(self.v1_hashes(), before)
+        self.assertEqual(self.face_hashes(), before)
         self.assertIn("published", out.lower())
 
     def test_detector_is_closed_after_success(self):
@@ -113,7 +113,7 @@ class SuccessTests(CliTestCase):
         self.assertIn("--regenerate-v2", err)
         self.assertEqual((self.dataset / "metadata.json").read_bytes(), before)
 
-    def test_regenerate_flag_replaces_the_version_two_dataset(self):
+    def test_regenerate_flag_replaces_the_pose_dataset(self):
         self.run_cli(detector=FakeDetector())
         code, _, err = self.run_cli("--regenerate-v2", detector=FakeDetector())
         self.assertEqual(code, 0, err)
@@ -138,7 +138,7 @@ class InputFailureTests(CliTestCase):
         self.assertEqual(s2.session_layout(self.dataset), "v1")
         self.assertEqual(det.closed, 0)  # detector never created
 
-    def test_missing_version_one_facial_data_writes_nothing(self):
+    def test_missing_face_data_writes_nothing(self):
         (self.dataset / "facial_data.json").unlink()
         code, _, err = self.run_cli(detector=FakeDetector())
         self.assertEqual(code, 2)
@@ -179,7 +179,7 @@ class FailurePathTests(CliTestCase):
         self.assertEqual(det.closed, 1)
         self.assertEqual(s2.session_layout(self.dataset), "v1")
 
-    def test_version_one_file_changed_during_run_is_reported(self):
+    def test_face_data_file_changed_during_run_is_reported(self):
         def tamper(index):
             if index == 0:
                 (self.dataset / "calibration.json").write_bytes(b"changed during run")
@@ -190,7 +190,7 @@ class FailurePathTests(CliTestCase):
     def test_frame_count_mismatch_is_reported_without_publishing(self):
         det = FakeDetector()
         (self.dataset / "facial_data.json").write_text(
-            __import__("json").dumps(tvb.v1_facial_frames(N - 2)), encoding="utf-8")
+            __import__("json").dumps(tvb.face_facial_frames(N - 2)), encoding="utf-8")
         code, _, err = self.run_cli(detector=det)
         self.assertEqual(code, 1)
         self.assertIn("frame counts", err)
@@ -198,7 +198,7 @@ class FailurePathTests(CliTestCase):
         self.assertEqual(det.closed, 1)
 
 
-class RollbackOnV1ChangeTests(CliTestCase):
+class RollbackOnFaceChangeTests(CliTestCase):
     """If a version 1 file changes during the run, the V2 output of that run is rolled back."""
 
     def _tamper_at_first_frame(self):
@@ -207,7 +207,7 @@ class RollbackOnV1ChangeTests(CliTestCase):
                 (self.dataset / "calibration.json").write_bytes(b"changed during run")
         return FakeDetector(on_detect=tamper)
 
-    def test_first_time_run_with_v1_change_leaves_no_v2(self):
+    def test_first_time_run_with_face_change_leaves_no_pose(self):
         code, _, err = self.run_cli(detector=self._tamper_at_first_frame())
         self.assertEqual(code, 4)
         self.assertIn("calibration.json", err)
@@ -217,7 +217,7 @@ class RollbackOnV1ChangeTests(CliTestCase):
         self.assertFalse((self.dataset / "manifest.json").exists())
         self.assertFalse((self.dataset / "facial").exists())
 
-    def test_regeneration_with_v1_change_restores_the_previous_v2(self):
+    def test_regeneration_with_face_change_restores_the_previous_pose(self):
         self.assertEqual(self.run_cli(detector=FakeDetector())[0], 0)
         previous_meta = (self.dataset / "metadata.json").read_bytes()
         previous_manifest = (self.dataset / "manifest.json").read_bytes()

@@ -1,18 +1,18 @@
 # Dataset layout
 
-Status: the V1 layout is **implemented** and used by the dashboard. The V2 layout is **partially implemented**: the schema and writer are implemented, and the Pose workflow writes into it (tested with synthetic data). Hand extraction and real-recording validation are pending.
+Status: the face data layout is **implemented** and used by the dashboard. The pose data layout is **partially implemented**: the schema and writer are implemented, and the Pose workflow writes into it (tested with synthetic data). Hand extraction and real-recording validation are pending.
 
 ## Folders
 
 ```text
 recordings/raw/<person>/<session>.mp4     original video (never modified)
 datasets/<person>/<session>/              derived outputs for one session
-datasets/<person>/dataset_metadata.json   person-level summary (V1)
+datasets/<person>/dataset_metadata.json   person-level summary (Face data)
 ```
 
 `<person>` and `<session>` are validated by `src/analysis/project_paths.py`. Session names look like `session-001`. The data root can be redirected with the `FACIAL_DATA_HOME` environment variable. It must contain `recordings/` and `datasets/`.
 
-## Version 1 (session root)
+## Face data (session root)
 
 | File | Contents |
 |---|---|
@@ -24,13 +24,13 @@ datasets/<person>/dataset_metadata.json   person-level summary (V1)
 | `calibration.json` | Neutral-frame count and the calibration method. |
 | `frames/` | Annotated JPEG frames (created by extraction). |
 
-## Version 2 (subfolders in the same session folder)
+## Pose data (subfolders in the same session folder)
 
-Version 1 and version 2 files coexist. Nothing in version 2 writes, moves or deletes version 1 files or `frames/`. A session is version 2 only when `metadata.json` declares schema 2.x. A folder with version 2 pieces but no `metadata.json` is incomplete and must be treated as absent.
+Face data and pose data files coexist. Nothing in pose data writes, moves or deletes face data files or `frames/`. A session is pose data only when `metadata.json` declares schema 2.x. A folder with pose data pieces but no `metadata.json` is incomplete and must be treated as absent.
 
 ```text
 metadata.json                 completion marker, written last
-manifest.json                 every version 2 file with size, SHA-256, and shape and dtype for arrays
+manifest.json                 every pose data file with size, SHA-256, and shape and dtype for arrays
 timeline.csv                  frame, timestamp_ms, face_detected, pose_detected, left_hand_detected, right_hand_detected
 facial/landmarks.npy          float32 (T, 478, 3)   x, y normalised; z relative on the x scale
 facial/transformation_matrices.npy   float32 (T, 4, 4)
@@ -47,7 +47,7 @@ quality/tracking_quality.json tracking quality for the face, body and hands stre
 
 `T` is the frame count, the same for every stream. Row `i` of every array is frame `i`. Missing detections are NaN rows, never dropped frames.
 
-Version 2 files that share a name with a version 1 file are placed in a subfolder, so they do not collide. The version 1 `tracking_quality.json` is at the session root; the version 2 one is `quality/tracking_quality.json`.
+Pose data files that share a name with a face data file are placed in a subfolder, so they do not collide. The face data `tracking_quality.json` is at the session root; the pose data one is `quality/tracking_quality.json`.
 
 ### Timestamps
 
@@ -91,15 +91,15 @@ Model files are kept in `models/mediapipe/`, which git ignores. They are never c
 python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
 ```
 
-It processes an existing V1 session (which must already have `facial_data.json`) into a V2 session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the V1 files. An existing V2 dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
+It processes an existing face data session (which must already have `facial_data.json`) into a pose data session. It verifies the Pose FULL model's SHA-256 before loading it, and it never writes to the raw video or the face data files. An existing pose dataset is refused unless `--regenerate-v2` is given, and the previous one is kept for rollback.
 
-Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a V1 file changed during the run. The V2 output of that run is rolled back with `rollback_v2`, which restores the previous V2 dataset if there was one. If the rollback is refused (for example, because a V2 file was edited), the output says so and the files are left in place. Version 1 files are never changed by the rollback.
+Exit codes: `0` published; `1` processing failed, nothing published; `2` refused before processing; `3` model missing or hash mismatch; `4` a face data file changed during the run. The pose data output of that run is rolled back with `rollback_v2`, which restores the previous pose dataset if there was one. If the rollback is refused (for example, because a pose data file was edited), the output says so and the files are left in place. Face data files are never changed by the rollback.
 
 This has been tested with synthetic data and a fake detector only. It has not been run on a real recording.
 
 ## Using the Pose workflow from code
 
-The pieces are separate, and nothing runs them automatically yet. Example, using a session folder that already has V1 facial data:
+The pieces are separate, and nothing runs them automatically yet. Example, using a session folder that already has face data facial data:
 
 ```python
 from pathlib import Path
@@ -131,13 +131,13 @@ write_v2_session(session_dir, payload)
 Notes on the example:
 
 - `fps` and the video size come from the video itself, so they are correct for any recording.
-- `write_v2_session` refuses to overwrite an existing version 2 dataset unless `regenerate=True` is passed.
+- `write_v2_session` refuses to overwrite an existing pose dataset unless `regenerate=True` is passed.
 - The example has not been run on a real recording. The synthetic tests cover the same steps with a fake detector.
 
 ## Limitations
 
 - Hand extraction is not implemented, so the hand stream is always absent.
-- The command-line entry point exists (see above). The dashboard's Body Motion page reads existing V2 sessions for viewing, but it does not generate them.
+- The command-line entry point exists (see above). The dashboard's Body Motion page reads existing pose data sessions for viewing, but it does not generate them.
 - No real recording has been processed through this workflow.
 - The workflow has been tested with synthetic data and a fake detector. A real recording has not yet been written through it.
 - Timestamps are `fps_derived`. Decoded presentation timestamps are not extracted.

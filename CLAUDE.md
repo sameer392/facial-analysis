@@ -2,7 +2,7 @@
 
 ## 1. Shared rules
 
-Before any task, read and follow **`AGENTS.md`**. It is the canonical source for architecture, data-integrity and scientific rules, dataset layouts, V2 recovery safety, dependency pins, testing, documentation, Git policy and scope restrictions. This file does not repeat those rules.
+Before any task, read and follow **`AGENTS.md`**. It is the canonical source for architecture, data-integrity and scientific rules, dataset layouts, pose data recovery safety, dependency pins, testing, documentation, Git policy and scope restrictions. This file does not repeat those rules.
 
 If this file ever conflicts with `AGENTS.md`, follow the more restrictive requirement, treat `AGENTS.md` as authoritative, and ask the user when the conflict affects scope, architecture or authorisation.
 

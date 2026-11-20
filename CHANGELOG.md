@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- Naming migration, step 4: test files and test names use the new terms (for example `test_pose_writer.py`); product docs (README, AGENTS.md, dataset layout, validation) use feature names, with code names in backticks unchanged.
 - Naming migration, step 3: the pose build script prints "pose data" wording, and the job parser reads the new markers only.
 - Naming migration, step 2: feature paths (`/face/…`, `/pose/…`) and job codes (`pose_build`, `face_extract`, `face_analyse`) beside the older ones; sessions carry a `layout_name` display field. Older paths and codes still work. Error codes renamed to `no_face_data` and `face_data_exists`.
 - Next.js migration P6: Audio and Hands placeholder pages, driven by a read-only layer status route.

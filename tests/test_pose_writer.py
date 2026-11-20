@@ -85,17 +85,17 @@ class SessionTestCase(unittest.TestCase):
             (self.session / name).write_bytes(data)
         (self.session / "frames").mkdir()
         (self.session / "frames" / "frame_000000.jpg").write_bytes(b"jpeg")
-        self.v1_hashes = self._hash_v1()
+        self.face_hashes = self._hash_face()
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _hash_v1(self):
+    def _hash_face(self):
         names = list(V1_FILES) + ["frames/frame_000000.jpg"]
         return {name: hashlib.sha256((self.session / name).read_bytes()).hexdigest() for name in names}
 
-    def assert_v1_unchanged(self):
-        for name, digest in self.v1_hashes.items():
+    def assert_face_unchanged(self):
+        for name, digest in self.face_hashes.items():
             path = self.session / name
             self.assertTrue(path.is_file(), f"v1 file removed: {name}")
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest, f"v1 file changed: {name}")
@@ -204,34 +204,34 @@ class InterruptionTests(SessionTestCase):
         self._interrupt("arrays")
         self.assertTrue(any(p.name.startswith(w.STAGING_PREFIX) for p in self.session.iterdir()))
         self.assertFalse((self.session / "metadata.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_interrupted_csv_writing(self):
         self._interrupt("csv")
         self.assertFalse((self.session / "metadata.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_interrupted_validation(self):
         self._interrupt("validate")
         self.assertFalse((self.session / "manifest.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_interrupted_manifest_creation(self):
         self._interrupt("manifest")
         self.assertFalse((self.session / "manifest.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_interrupted_publication_leaves_identifiable_incomplete_state(self):
         self._interrupt("publish")
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
         self.assertTrue((self.session / "manifest.json").is_file())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_interruption_before_metadata_is_incomplete(self):
         self._interrupt("metadata")
         self.assertFalse((self.session / "metadata.json").exists())
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_incomplete_data_is_never_read_as_complete(self):
         self._interrupt("publish")
@@ -246,7 +246,7 @@ class InterruptionTests(SessionTestCase):
                 self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2")], [])
                 self.assertFalse((self.session / "metadata.json").exists())
                 self.assertFalse((self.session / "manifest.json").exists())
-                self.assert_v1_unchanged()
+                self.assert_face_unchanged()
                 self.assertEqual(s2.session_layout(self.session), "v1")
 
     def setUp_clean(self):
@@ -262,11 +262,11 @@ class InterruptionTests(SessionTestCase):
         w.recover_incomplete_v2(self.session)
         w.write_v2_session(self.session, make_payload())
         self.assertEqual(s2.session_layout(self.session), "v2")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
 
 class RegenerationAndRollbackTests(SessionTestCase):
-    def test_existing_v2_is_protected_by_default(self):
+    def test_existing_pose_is_protected_by_default(self):
         w.write_v2_session(self.session, make_payload())
         with self.assertRaises(w.V2ExistsError):
             w.write_v2_session(self.session, make_payload(seed=1))
@@ -286,7 +286,7 @@ class RegenerationAndRollbackTests(SessionTestCase):
         previous = [p for p in self.session.iterdir() if p.name.startswith(w.PREVIOUS_PREFIX)]
         self.assertEqual(len(previous), 1)
         self.assertTrue((previous[0] / "metadata.json").is_file())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_failed_regeneration_is_recovered_with_previous_dataset(self):
         w.write_v2_session(self.session, make_payload(seed=0))
@@ -297,23 +297,23 @@ class RegenerationAndRollbackTests(SessionTestCase):
         self.assertEqual(s2.session_layout(self.session), "v2")
         restored = hashlib.sha256((self.session / "facial" / "landmarks.npy").read_bytes()).hexdigest()
         self.assertEqual(restored, old_sha)
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
-    def test_rollback_removes_only_v2_files(self):
+    def test_rollback_removes_only_pose_files(self):
         w.write_v2_session(self.session, make_payload())
         actions = w.rollback_v2(self.session)
         self.assertTrue(actions)
         self.assertFalse((self.session / "metadata.json").exists())
         self.assertFalse((self.session / "facial").exists())
         self.assertEqual(s2.session_layout(self.session), "v1")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_rollback_restores_previous_dataset(self):
         w.write_v2_session(self.session, make_payload(seed=0))
         w.write_v2_session(self.session, make_payload(seed=1), regenerate=True)
         w.rollback_v2(self.session)
         self.assertEqual(s2.session_layout(self.session), "v2")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_rollback_refuses_modified_files(self):
         w.write_v2_session(self.session, make_payload())
@@ -390,8 +390,8 @@ class LockTests(SessionTestCase):
         self.assertEqual(s2.session_layout(self.session), "v2")
 
 
-class VersionOneNameTests(unittest.TestCase):
-    def test_only_root_level_version_one_names_are_protected(self):
+class FaceDataNameTests(unittest.TestCase):
+    def test_only_root_level_face_data_names_are_protected(self):
         self.assertTrue(w.is_v1_path("facial_data.json"))
         self.assertTrue(w.is_v1_path("frames/frame_000001.jpg"))
         self.assertFalse(w.is_v1_path("quality/tracking_quality.json"))
@@ -416,7 +416,7 @@ class PostPublicationTests(SessionTestCase):
                 w.write_v2_session(self.session, make_payload())
         self.assertFalse((self.session / "metadata.json").exists())
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
 
 class RecoverySafetyTests(SessionTestCase):
@@ -431,16 +431,16 @@ class RecoverySafetyTests(SessionTestCase):
             w.recover_incomplete_v2(self.session)
         self.assertTrue((self.session / "manifest.json").is_file())
         self.assertTrue((self.session / "facial" / "landmarks.npy").is_file())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
-    def test_recovery_refuses_a_manifest_that_lists_a_version_1_file(self):
+    def test_recovery_refuses_a_manifest_that_lists_a_face_data_file(self):
         self._interrupted_publish()
         manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
         manifest["files"].append({"path": "facial_data.json", "bytes": 1, "sha256": "0" * 64})
         (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaises(w.V2Error):
             w.recover_incomplete_v2(self.session)
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_recovery_refuses_to_delete_a_modified_file(self):
         self._interrupted_publish()
@@ -449,14 +449,14 @@ class RecoverySafetyTests(SessionTestCase):
             w.recover_incomplete_v2(self.session)
         self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "edited by hand\n")
 
-    def test_rollback_refuses_a_manifest_that_lists_a_version_1_file(self):
+    def test_rollback_refuses_a_manifest_that_lists_a_face_data_file(self):
         w.write_v2_session(self.session, make_payload())
         manifest = json.loads((self.session / "manifest.json").read_text(encoding="utf-8"))
         manifest["files"].append({"path": "calibration.json", "bytes": 1, "sha256": "0" * 64})
         (self.session / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaises(w.V2Error):
             w.rollback_v2(self.session)
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
 
 class HeaderReadTests(SessionTestCase):
@@ -491,7 +491,7 @@ class StagingCleanupTests(SessionTestCase):
                 w.write_v2_session(self.session, make_payload())
         self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
         self.assertFalse((self.session / "metadata.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_simulated_crash_keeps_the_staging_folder_for_recovery(self):
         with self.assertRaises(w.SimulatedInterruption):
@@ -506,7 +506,7 @@ class DestinationCollisionTests(SessionTestCase):
             w.write_v2_session(self.session, make_payload())
         self.assertEqual((self.session / "timeline.csv").read_text(encoding="utf-8"), "stray\n")
         self.assertFalse((self.session / "metadata.json").exists())
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_collision_check_leaves_no_staging_folder(self):
         (self.session / "facial").mkdir()
@@ -517,10 +517,10 @@ class DestinationCollisionTests(SessionTestCase):
 
 
 class IncompleteDetectionTests(SessionTestCase):
-    def test_v1_only(self):
+    def test_face_only(self):
         self.assertEqual(s2.session_layout(self.session), "v1")
 
-    def test_v2_folders_without_metadata(self):
+    def test_pose_folders_without_metadata(self):
         (self.session / "facial").mkdir()
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
 

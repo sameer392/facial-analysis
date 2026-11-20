@@ -55,7 +55,7 @@ class BlendshapeNamesTests(unittest.TestCase):
 
 
 class TimestampTests(unittest.TestCase):
-    def test_fps_derived_matches_version_1_rule(self):
+    def test_fps_derived_matches_face_data_rule(self):
         ts, source = s2.frame_timestamps_ms(10, fps=30.0)
         self.assertEqual(source, "fps_derived")
         np.testing.assert_array_equal(ts, [round(i * 1000 / 30) for i in range(10)])
@@ -234,15 +234,15 @@ class LayoutTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_version_1_session(self):
+    def test_face_data_session(self):
         (self.tmp / "facial_data.json").write_text("[]")
         self.assertEqual(s2.session_layout(self.tmp), "v1")
 
-    def test_version_2_session_needs_metadata(self):
+    def test_pose_data_session_needs_metadata(self):
         (self.tmp / "metadata.json").write_text(json.dumps(good_metadata()))
         self.assertEqual(s2.session_layout(self.tmp), "v2")
 
-    def test_v2_folders_without_metadata_are_incomplete(self):
+    def test_pose_folders_without_metadata_are_incomplete(self):
         (self.tmp / "facial").mkdir()
         self.assertEqual(s2.session_layout(self.tmp), "incomplete_v2")
 
@@ -253,7 +253,7 @@ class LayoutTests(unittest.TestCase):
     def test_empty_folder(self):
         self.assertEqual(s2.session_layout(self.tmp), "none")
 
-    def test_v1_and_v2_can_coexist(self):
+    def test_face_and_pose_can_coexist(self):
         (self.tmp / "facial_data.json").write_text("[]")
         (self.tmp / "metadata.json").write_text(json.dumps(good_metadata()))
         self.assertEqual(s2.session_layout(self.tmp), "v2")

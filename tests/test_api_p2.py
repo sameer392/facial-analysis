@@ -61,7 +61,7 @@ class SummaryParityTests(P2TestCase):
     def test_summary_carries_the_scope_statement(self):
         self.assertIn("does not measure", v1_data.summary("demo_person", "session-001")["quality"]["scope"])
 
-    def test_missing_v1_data_is_not_found(self):
+    def test_missing_face_data_is_not_found(self):
         with self.assertRaises(ApiError) as ctx:
             v1_data.summary("demo_person", "session-009")
         self.assertEqual(ctx.exception.status, 404)

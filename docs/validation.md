@@ -143,7 +143,7 @@ coordinates are set to NaN, unless their visibility is at least 0.5. Joints insi
 kept whatever their visibility. Visibility and presence are kept as recorded.
 
 - Implemented in `src/analysis/pose_gating.py`, and tested in `tests/test_pose_gating.py`.
-- It returns a derived copy. The stored V2 arrays are not changed.
+- It returns a derived copy. The stored pose data arrays are not changed.
 - The threshold of 0.5 is an empirical choice, not a validated constant.
 - On the first real recording (`sameer_gupta/session-003`), the gate removed 49.0% of joint samples. The hips and ankles were removed in every frame. The shoulders were kept in every frame, and the elbows in about 80%.
 - Visibility is the model's own estimate. It has not been checked against manual annotation.

@@ -22,7 +22,7 @@ import demo_data  # noqa: E402
 import facial_3d_analyzer as f3  # noqa: E402
 import facial_analyzer as fa  # noqa: E402
 import v2_viewer as vv  # noqa: E402
-import test_v2_viewer as tv  # noqa: E402  (synthetic V2 writer)
+import test_pose_viewer as tv  # noqa: E402  (synthetic V2 writer)
 from api import v1_data, v2_data  # noqa: E402
 from api.catalog import ApiError  # noqa: E402
 from test_api_p0 import call  # noqa: E402
@@ -63,7 +63,7 @@ class P3TestCase(unittest.TestCase):
         demo_data.generate_session(self.tmp, "session-001", demo_data.SESSIONS["session-001"])
         demo_data.generate_session(self.tmp, "session-002", demo_data.SESSIONS["session-002"])
         self.v2_dir = pp.DATASETS_ROOT / PERSON / "session-001"
-        tv.write_v2(self.v2_dir)
+        tv.write_pose(self.v2_dir)
         self.frames = tv.N
         self.write_video(pp.session_video(PERSON, "session-001"))
 
@@ -170,12 +170,12 @@ class ErrorTests(P3TestCase):
                     fn()
                 self.assertEqual(ctx.exception.code, code)
 
-    def test_session_without_v2_data_is_not_found(self):
+    def test_session_without_pose_data_is_not_found(self):
         with self.assertRaises(ApiError) as ctx:
             v2_data.info(PERSON, "session-002")
         self.assertEqual((ctx.exception.status, ctx.exception.code), (404, "no_v2_data"))
 
-    def test_invalid_v2_session_is_refused_with_reason(self):
+    def test_invalid_pose_session_is_refused_with_reason(self):
         (self.v2_dir / "body" / "pose_landmarks.npy").write_bytes(b"not a numpy file")
         with self.assertRaises(ApiError) as ctx:
             v2_data.info(PERSON, "session-001")

@@ -98,16 +98,16 @@ docs/
   screenshots/                dashboard images (may be outdated; see below)
 src/
   analysis/                   extraction, analysis, schema and writer modules
-    analyze_faces.py          V1 analysis entry point
+    analyze_faces.py          face data analysis entry point
     demo_data.py              synthetic demo data generator
-    extract_faces.py          V1 facial extractor
+    extract_faces.py          face data facial extractor
     facial_3d_analyzer.py
     facial_analyzer.py
     file_safety.py            overwrite checks and atomic writes
     motion_analyzer.py
     project_paths.py          folder layout, FACIAL_DATA_HOME
-    schema_v2.py              V2 schema
-    session_writer_v2.py      V2 writer, recovery and rollback
+    schema_v2.py              pose data schema
+    session_writer_v2.py      pose data writer, recovery and rollback
     validation.py
     visualization.py
   dashboard/
@@ -125,7 +125,7 @@ src/
                               catalog.py (health, persons, sessions). Planned, not implemented:
                               the web app, write endpoints, job system (docs/proposals/nextjs_migration.md)
   extraction/                 video_frames.py, model_registry.py, pose_extractor.py,
-                              v2_session_builder.py, build_v2_session.py (Pose-to-V2 CLI)
+                              v2_session_builder.py, build_v2_session.py (Pose data command-line entry point)
                               (hand and audio extraction: not implemented)
   training/                   placeholders only (.gitkeep)
   inference/                  placeholders only (.gitkeep)
@@ -149,7 +149,7 @@ README.md
 
 Session folders are `datasets/<person>/<session>/`. The root is set by `project_paths.py`, and can be redirected with the `FACIAL_DATA_HOME` environment variable (the folder must contain `recordings/` and `datasets/`). Recordings are read from `recordings/raw/<person>/<session>.mp4`.
 
-### V1 layout (session root)
+### Face data layout (session root)
 
 - `facial_data.json`
 - `facial_blendshapes.csv`
@@ -159,20 +159,20 @@ Session folders are `datasets/<person>/<session>/`. The root is set by `project_
 - `calibration.json`
 - `frames/`
 
-### V2 layout (subdirectories in the same session folder)
+### Pose data layout (subdirectories in the same session folder)
 
 - `metadata.json` (completion marker, written last)
 - `manifest.json`
 - `timeline.csv`
 - `facial/`, `body/`, `hands/`, `quality/`
 
-Note that `tracking_quality.json` exists in both layouts at different paths: `<session>/tracking_quality.json` (V1) and `<session>/quality/tracking_quality.json` (V2).
+Note that `tracking_quality.json` exists in both layouts at different paths: `<session>/tracking_quality.json` (Face data) and `<session>/quality/tracking_quality.json` (Pose data).
 
 ### Coexistence rules
 
-- V1 and V2 coexist in the same session folder.
-- V2 generation, regeneration, migration and recovery must not silently overwrite, move or delete V1 files, or the frames folder.
-- A session is treated as V2 only when `metadata.json` declares schema 2.x. Otherwise it is V1. A folder with V2 pieces but no `metadata.json` is incomplete and must be treated as absent.
+- face data and pose data coexist in the same session folder.
+- pose data generation, regeneration, migration and recovery must not silently overwrite, move or delete face data files, or the frames folder.
+- A session is treated as pose data only when `metadata.json` declares schema 2.x. Otherwise it is face data. A folder with pose data pieces but no `metadata.json` is incomplete and must be treated as absent.
 
 ## 6. Implementation Status
 
@@ -188,18 +188,18 @@ Do not describe a phase as implemented when only some of its steps are.
 
 ### Phase 2 â€” Multimodal Dataset Infrastructure: partially implemented
 
-- **Step 1, V2 schema: implemented** (`src/analysis/schema_v2.py`).
-- **Step 2, V2 session writer: implemented** (`src/analysis/session_writer_v2.py`), with staging, manifest, lock, recovery and rollback (section 7).
+- **Step 1, pose data schema: implemented** (`src/analysis/schema_v2.py`).
+- **Step 2, pose data session writer: implemented** (`src/analysis/session_writer_v2.py`), with staging, manifest, lock, recovery and rollback (section 7).
 - **Stage 2, shared video frame reader: implemented** (`src/extraction/video_frames.py`). Strict: missing, unopenable, empty or truncated videos raise errors. Timestamps are `fps_derived`; decoded presentation times are not extracted yet.
 - **Stage 3, model registry: implemented** (`src/extraction/model_registry.py`). Verifies SHA-256 before any model is loaded. Records licence status as evidence, not clearance.
 - **Stage 4, Pose Landmarker extractor: implemented** (`src/extraction/pose_extractor.py`). Single subject only; missing detections are NaN rows. Tested with a fake detector; a one-off smoke test ran the real model on a blank synthetic video only.
-- **Stage 5, V2 session assembly: implemented** (`src/extraction/v2_session_builder.py`). Combines V1 facial data (read only) with the Pose output and writes through the V2 writer. Hands are recorded as an absent stream. Tested with synthetic data.
-- **Pose-to-V2 command-line entry point: implemented** (`src/extraction/build_v2_session.py`). Verifies the model's SHA-256, refuses an existing V2 dataset unless `--regenerate-v2` is given, always closes the detector, and checks that V1 files are unchanged. If a V1 file changes, it rolls back that run's V2 output and reports the outcome honestly. Tested with synthetic data and a fake detector only.
+- **Stage 5, pose data session assembly: implemented** (`src/extraction/v2_session_builder.py`). Combines face data (read only) with the Pose output and writes through the pose data writer. Hands are recorded as an absent stream. Tested with synthetic data.
+- **Pose data command-line entry point: implemented** (`src/extraction/build_v2_session.py`). Verifies the model's SHA-256, refuses an existing pose dataset unless `--regenerate-v2` is given, always closes the detector, and checks that face data files are unchanged. If a face data file changes, it rolls back that run's pose data output and reports the outcome honestly. Tested with synthetic data and a fake detector only.
 - **Overall phase: incomplete.** Still pending:
   - hand extraction (the hand stream is currently recorded as absent)
   - validation on real recordings (no real session has been written through the Pose workflow yet; no recording has been approved for this)
-  - the V1-to-V2 migration command
-  - the Hand part of the Body and Hand Motion dashboard page, and a dashboard button that generates pose data (the Body Motion page is a read-only viewer of existing V2 sessions)
+  - the face-to-pose migration command
+  - the Hand part of the Body and Hand Motion dashboard page, and a dashboard button that generates pose data (the Body Motion page is a read-only viewer of existing pose data sessions)
   - PTS timestamp extraction (timestamps are currently FPS-derived)
   - model licence clearance for commercial use or redistribution (Pose FULL is partly verified; Face and Hand are unverified)
 
@@ -208,9 +208,9 @@ Do not describe a phase as implemented when only some of its steps are.
 - **Phase P0, read-only Python API: implemented** (`api/main.py`, `api/catalog.py`). Routes: `GET /api/health`, `GET /api/persons`, `GET /api/persons/{person}/sessions`. Names are validated, errors carry a code and status, and no request writes to disk. Run with `uvicorn api.main:app --host 127.0.0.1 --port 8000`. Tested with synthetic data (11 tests).
 - **Phase P1, read-only web shell: implemented** (`web/`). Next.js 16, React 19, TypeScript 5.9, Tailwind CSS 4, TanStack Query and Lucide, all pinned exactly in `web/package.json`. Pages: Overview, People, a person's sessions, Recordings. The browser calls `/api`, which Next.js proxies to the local API only. Checked by `npm run typecheck`, `npm run build` (CI, Ubuntu) and a headless browser screenshot on local data. Components are hand-written; shadcn/ui is not yet used.
 - **Not yet started:** write endpoints (uploads, jobs, deletes), the job system, and parity pages for the analysis views (phases P2 to P7 in the proposal).
-- **Phase P2, analysis pages: implemented.** `api/v1_data.py` adds read-only routes under `/api/persons/{person}/sessions/{session}/v1/` (`summary`, `series`, `blinks`, `landmarks/{index}`) and `/api/persons/{person}/comparison`. They read the version 1 files with the same analysis code as the dashboard, and `tests/test_api_p2.py` checks parity. The web app adds Facial analysis, Diagnostics and Compare pages with ECharts 6.1.0 (`web/app/components/chart.tsx`). No route writes to disk. Checked by typecheck and build; a browser check on local data is still pending.
+- **Phase P2, analysis pages: implemented.** `api/v1_data.py` adds read-only routes under `/api/persons/{person}/sessions/{session}/v1/` (`summary`, `series`, `blinks`, `landmarks/{index}`) and `/api/persons/{person}/comparison`. They read the face data files with the same analysis code as the dashboard, and `tests/test_api_p2.py` checks parity. The web app adds Facial analysis, Diagnostics and Compare pages with ECharts 6.1.0 (`web/app/components/chart.tsx`). No route writes to disk. Checked by typecheck and build; a browser check on local data is still pending.
 - **Phase P3, 3D and Body Motion: implemented.** `api/v2_data.py` adds read-only routes: `v2` (validation, cached on metadata mtime; invalid sessions return 422 with the reason), `v2/timeline`, `v2/pose?start&end&threshold` (at most 300 frames per request), `v2/frames/{index}/quality`, `v2/frames/{index}/overlay.jpg` (drawn with `v2_viewer.draw_pose_overlay`), and `v1/head-pose` (yaw, pitch, roll and depth span from `facial_3d_analyzer`). Tests: `tests/test_api_p3.py`. The web app adds `3d` and `body` pages. The 3D page is a projection with depth as colour; a rotatable 3D view needs `echarts-gl`, which is not installed and needs approval.
-- **Phase P4, job system: implemented.** Kinds: `v2_build`, `v1_extract` (`src/analysis/extract_faces.py`, per-frame progress from its `Processed` lines, refuses existing V1 data, checks the face model hash before queueing), `v1_analyse` (`src/analysis/analyze_faces.py`, `--force` on regenerate). One active job per session across all kinds. Workers run with unbuffered output. A cancelled or interrupted extraction can leave a partly written `frames/` folder; it is reported and never removed. Note: the extraction script itself loads the face model without a hash check when run by hand; only the job path checks it. `api/jobs.py` runs the V2 build CLI (`src/extraction/build_v2_session.py`) as a separate process and stores job records in `logs/jobs.sqlite3` (git-ignored). Routes: `POST /api/jobs` (202, token required; refusals before queueing: bad names, missing video or V1 data, existing V2 without `regenerate`, writer lock present, one active job per session), `GET /api/jobs`, `GET /api/jobs/{id}`, `POST /api/jobs/{id}/cancel` (token required). Startup marks unfinished jobs `interrupted` and lists leftover `.v2-staging-*`, `.v2-previous-*` and `.v2-lock` items; nothing is removed automatically. The API token is printed at startup, or set with `FACIAL_API_TOKEN`. The web Jobs page (`web/app/jobs/page.tsx`) keeps the token in sessionStorage for the tab and sends it as `X-Facial-Token`. Not yet built: V1 extraction and analysis job kinds, SSE progress, per-frame progress. Tests: `tests/test_api_p4.py` (fake worker, no model).
+- **Phase P4, job system: implemented.** Kinds: `pose_build`, `face_extract` (`src/analysis/extract_faces.py`, per-frame progress from its `Processed` lines, refuses existing face data, checks the face model hash before queueing), `face_analyse` (`src/analysis/analyze_faces.py`, `--force` on regenerate); the older codes `v2_build`, `v1_extract` and `v1_analyse` are still accepted. One active job per session across all kinds. Workers run with unbuffered output. A cancelled or interrupted extraction can leave a partly written `frames/` folder; it is reported and never removed. Note: the extraction script itself loads the face model without a hash check when run by hand; only the job path checks it. `api/jobs.py` runs the pose data build CLI (`src/extraction/build_v2_session.py`) as a separate process and stores job records in `logs/jobs.sqlite3` (git-ignored). Routes: `POST /api/jobs` (202, token required; refusals before queueing: bad names, missing video or face data, existing pose data without `regenerate`, writer lock present, one active job per session), `GET /api/jobs`, `GET /api/jobs/{id}`, `POST /api/jobs/{id}/cancel` (token required). Startup marks unfinished jobs `interrupted` and lists leftover `.pose-staging-*`, `.pose-previous-*` and lock items (older `.v2-` names included); nothing is removed automatically. The API token is printed at startup, or set with `FACIAL_API_TOKEN`. The web Jobs page (`web/app/jobs/page.tsx`) keeps the token in sessionStorage for the tab and sends it as `X-Facial-Token`. Not yet built: SSE progress, and per-frame progress for the analysis job. Tests: `tests/test_api_p4.py` (fake worker, no model).
 - **Phase P5, models, logs and settings: implemented (read-only).** `api/system.py` provides `GET /api/models` (SHA-256 status for each registry entry, cached on size and modification time; models are never loaded; licence text is shown exactly as recorded), `GET /api/logs/jobs` and `GET /api/logs/jobs/{id}?lines=` (job worker logs, with the project and home folders replaced by `<project>` and `<home>`), and `GET /api/settings` (names only, token status only). The web pages are `/models`, `/logs` and `/settings`. Tests: `tests/test_api_p5.py`.
 - **Phase P6, Audio and Hands placeholders: implemented.** `GET /api/layers` reports whether `src/extraction/audio_extractor.py` and `src/extraction/hand_extractor.py` exist; the web pages `/audio` and `/hands` show Not implemented until they do, and say what is needed. Tests in `tests/test_api_p5.py`.
 - **Naming migration, step 2: done.** New API paths: `/face/summary`, `/face/series`, `/face/blinks`, `/face/landmarks/{i}`, `/face/head-pose`, `/pose`, `/pose/timeline`, `/pose/frames`, `/pose/frames/{i}/quality`, `/pose/frames/{i}/overlay.jpg`. The `/v1/` and `/v2/` paths are still served for one phase. Job codes `pose_build`, `face_extract` and `face_analyse` are the current names; `v2_build`, `v1_extract` and `v1_analyse` are still accepted. Session rows include `layout_name`. Plan: `docs/proposals/naming_migration.md`. Tests: `tests/test_naming_step2.py`.
@@ -220,31 +220,31 @@ Do not describe a phase as implemented when only some of its steps are.
 ### Other status
 
 - Audio Analysis dashboard page: placeholder.
-- Body Motion dashboard page: read-only viewer of existing V2 Pose sessions (`src/dashboard/pages/04_Body_Motion.py`, support code `src/dashboard/v2_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
+- Body Motion dashboard page: read-only viewer of existing pose data sessions (`src/dashboard/pages/04_Body_Motion.py`, support code `src/dashboard/v2_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.
 
-### V1 extractor history
+### Face data extractor history
 
-The V1 extractor is `src/analysis/extract_faces.py`. Its documented changes are:
+The face data extractor is `src/analysis/extract_faces.py`. Its documented changes are:
 
 - Commit `40d5b75`: person and session arguments, and the person/session path layout.
 - Commit `e8f032d`: overwrite protection and atomic JSON writes.
 
 The `facial_data.json` format is unchanged, but the extractor and frame storage have changed.
 
-Preserve V1 compatibility. Do not treat the V1 extractor as immutable. Changes to it need an explicit request, compatibility tests and documentation.
+Preserve face data compatibility. Do not treat the face data extractor as immutable. Changes to it need an explicit request, compatibility tests and documentation.
 
-## 7. V2 Session Writer Safety
+## 7. Pose data Session Writer Safety
 
 Preserve these mechanisms. Do not simplify them to reduce code.
 
 Conventions in a session folder:
 
-- `.v2-staging-*`: temporary staging folders used while a V2 dataset is generated.
-- `.v2-previous-*`: the previous V2 dataset, kept during regeneration so it can be restored.
-- `.v2-lock`: exclusive lock that stops a second writer working on the same session.
+- `.pose-staging-*` (older builds: `.v2-staging-*`): temporary staging folders used while a pose dataset is generated.
+- `.pose-previous-*` (older builds: `.v2-previous-*`): the previous pose dataset, kept during regeneration so it can be restored.
+- `.pose-lock` (older builds: `.v2-lock`, which still blocks writes): exclusive lock that stops a second writer working on the same session.
 
 Rules:
 
@@ -252,10 +252,10 @@ Rules:
 2. Keep the manifest and file-integrity hashes. Verify the published files against the manifest before `metadata.json` is written.
 3. Publish `metadata.json` last. It is the completion marker.
 4. Do not bypass staging or validation.
-5. Never remove or overwrite V1 data during V2 generation, regeneration, migration or recovery.
-6. Do not remove or overwrite a previous V2 dataset except through the regeneration workflow.
-7. Recovery and rollback must refuse to remove any file whose size or hash no longer matches the manifest, and any manifest that lists a V1 file.
-8. `recover_incomplete_v2` clears `.v2-lock`. Run it only after confirming that no writer is active. Running it during a live write defeats the lock. Never clear staging, previous or lock files by hand without understanding their state.
+5. Never remove or overwrite face data during pose data generation, regeneration, migration or recovery.
+6. Do not remove or overwrite a previous pose dataset except through the regeneration workflow.
+7. Recovery and rollback must refuse to remove any file whose size or hash no longer matches the manifest, and any manifest that lists a face data file.
+8. `recover_incomplete_v2` clears the lock file (`.pose-lock` or `.v2-lock`). Run it only after confirming that no writer is active. Running it during a live write defeats the lock. Never clear staging, previous or lock files by hand without understanding their state.
 9. Test partial writes, crashes and recovery whenever this code changes.
 
 ## 8. Data Integrity and Scientific Requirements
@@ -264,7 +264,7 @@ Mandatory:
 
 - Preserve frame order.
 - Preserve timestamps and their provenance.
-- Prefer valid decoded presentation timestamps (PTS). Use FPS-derived timestamps only as a fallback, and record which source was used. (At present, V1 and the V2 writer rely on FPS-derived timestamps. Decoded PTS are not yet extracted.)
+- Prefer valid decoded presentation timestamps (PTS). Use FPS-derived timestamps only as a fallback, and record which source was used. (At present, face data and the pose data writer rely on FPS-derived timestamps. Decoded PTS are not yet extracted.)
 - Keep one shared timeline across modalities.
 - Represent missing detections as NaN rows. Never silently drop frames.
 - Validate array shapes, timestamps and data types.
@@ -366,7 +366,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 If test modules or the workflow change, update this command in the same change.
 
-Tests should cover, where relevant: normal input, invalid input, missing detections, irregular timestamps, shape validation, V1 compatibility, V2 schema validation, file integrity, and partial writes with recovery.
+Tests should cover, where relevant: normal input, invalid input, missing detections, irregular timestamps, shape validation, face data compatibility, pose data schema validation, file integrity, and partial writes with recovery.
 
 Never remove or weaken a test merely to make the suite pass.
 
@@ -449,7 +449,7 @@ When instructions conflict:
 Unless explicitly requested, do not:
 
 - Modify unrelated repositories, ComfyUI or other local AI projects.
-- Change V1 extraction behaviour.
+- Change face data extraction behaviour.
 - Download models or add model binaries.
 - Upload or push code to GitHub.
 - Commit personal videos, biometric recordings, datasets, credentials, tokens, passwords or private keys.

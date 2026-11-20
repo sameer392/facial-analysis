@@ -20,22 +20,22 @@ training is not implemented yet.
 | Streamlit dashboard: people and sessions, add or process recordings, delete data, six pages | Implemented |
 | Overwrite protection (`--force` for analysis, never for extraction) | Implemented |
 | Synthetic demo data generator | Implemented |
-| V2 schema and session writer (staging, manifest, lock, recovery, rollback) | Implemented |
+| Pose data schema and session writer (staging, manifest, lock, recovery, rollback) | Implemented |
 | Shared video frame reader | Implemented |
 | Model registry with SHA-256 verification before loading | Implemented |
-| Pose Landmarker extraction (FULL model, single subject) and V2 session assembly | **Implemented, tested with synthetic data and a fake detector; not validated on real recordings** |
-| Pose-to-V2 command-line entry point (`src/extraction/build_v2_session.py`) | **Implemented, tested with synthetic data; not run on a real recording** |
-| Rollback of a run's V2 output when a V1 file changes during processing | Implemented (CLI, exit code 4) |
+| Pose Landmarker extraction (FULL model, single subject) and pose data session assembly | **Implemented, tested with synthetic data and a fake detector; not validated on real recordings** |
+| Pose data command-line entry point (`src/extraction/build_v2_session.py`) | **Implemented, tested with synthetic data; not run on a real recording** |
+| Rollback of a run's pose data output when a face data file changes during processing | Implemented (CLI, exit code 4) |
 | Next.js migration, phase P0: read-only Python API (`api/`) for health, persons and sessions | **Implemented, tested with synthetic data.** Read-only; binds to 127.0.0.1 when run. The web app and later phases are planned ([docs/proposals/nextjs_migration.md](docs/proposals/nextjs_migration.md)) |
 | Next.js migration, phase P1: read-only web shell (`web/`) with Overview, People, sessions and Recordings | **Implemented, built and checked in a browser on local data.** Read-only. Run it with `npm ci` then `npm run dev` in `web/`, with the API on 127.0.0.1:8000 |
 | Hand Landmarker extraction | **Not implemented** (the hand stream is recorded as absent) |
-| V1-to-V2 migration command | **Not implemented** |
-| Next.js migration, phase P2: facial analysis, diagnostics and dataset comparison pages (`web/`) on read-only `/api` routes for version 1 data. Charts use ECharts 6.1.0 | **Implemented, typechecked and built. Browser check on local data pending** |
-| Next.js migration, phase P3: 3D facial page and Body Motion page (`web/`) on read-only `/api` routes for head pose and V2 Pose data. Body overlay is drawn by the API from the stored video (same code as the Streamlit page) | **Implemented, typechecked, built, tested with synthetic data and checked on a real V2 session in headless Chrome.** 3D is a projection, not a rotatable model (see below) |
-| Next.js migration, phase P4: job system for V2 builds (`api/jobs.py`). Jobs run the existing CLI build in a separate process; one active job per session; cancel; restart marks unfinished jobs interrupted and reports leftovers, never removes them. Mutating routes need the API token. Web Jobs page (`/jobs`): token entry (kept for the tab only), start, live list and cancel. Kinds: V2 build, V1 face extraction (per-frame progress, face model checked before queueing, never overwrites), V1 analysis outputs. Web Jobs page (`/jobs`) with a kind selector. No SSE yet | **Implemented and tested with a fake worker (26 tests). Real V2 build run on sameer_gupta/session-001 succeeded (62 frames, V1 unchanged). V1 kinds not yet run for real** |
+| Face-to-pose migration command | **Not implemented** |
+| Next.js migration, phase P2: facial analysis, diagnostics and dataset comparison pages (`web/`) on read-only `/api` routes for face data. Charts use ECharts 6.1.0 | **Implemented, typechecked and built. Browser check on local data pending** |
+| Next.js migration, phase P3: 3D facial page and Body Motion page (`web/`) on read-only `/api` routes for head pose and pose data Pose data. Body overlay is drawn by the API from the stored video (same code as the Streamlit page) | **Implemented, typechecked, built, tested with synthetic data and checked on a real pose data session in headless Chrome.** 3D is a projection, not a rotatable model (see below) |
+| Next.js migration, phase P4: job system for pose data builds (`api/jobs.py`). Jobs run the existing CLI build in a separate process; one active job per session; cancel; restart marks unfinished jobs interrupted and reports leftovers, never removes them. Mutating routes need the API token. Web Jobs page (`/jobs`): token entry (kept for the tab only), start, live list and cancel. Kinds: Pose data build, face data face extraction (per-frame progress, face model checked before queueing, never overwrites), face data analysis outputs. Web Jobs page (`/jobs`) with a kind selector. No SSE yet | **Implemented and tested with a fake worker (26 tests). Real pose data build run on sameer_gupta/session-001 succeeded (62 frames, face data unchanged). Face data kinds not yet run for real** |
 | Next.js migration, phase P5: Models (hash status against the registry, licence text as recorded), Logs (job worker output, project and home paths redacted) and Settings (names only, no token). Read-only, `api/system.py` | **Implemented, tested (11 tests), checked live: all three model hashes match, and rendered in headless Chrome** |
 | Next.js migration, phase P6: Audio and Hands pages show their status (`/api/layers`) and what is needed, until the extractors exist. No audio or hand data is shown | **Implemented as placeholders (tested; pages built)** |
-| Body Motion (V2 Pose) dashboard page | **Implemented as a read-only viewer** of existing V2 sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
+| Body Motion (Pose data Pose) dashboard page | **Implemented as a read-only viewer** of existing pose data sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 | Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
@@ -160,18 +160,18 @@ can also upload a video and delete sessions or people (**Manage data**).
   ```
 - Analysis never modifies `facial_data.json` or the recording.
 
-## Pose-to-V2 command line (implemented; not validated on real recordings)
+## Pose data command line (implemented; not validated on real recordings)
 
 ```powershell
 python src/extraction/build_v2_session.py <person> <session> [--regenerate-v2] [--models-dir DIR]
 ```
 
-- It processes an existing V1 session. The V1 facial data (`facial_data.json`) must already exist.
+- It processes an existing face data session. The face data facial data (`facial_data.json`) must already exist.
 - It verifies the Pose FULL model's SHA-256 before loading it. A missing or altered model is refused.
-- An existing V2 dataset is refused unless `--regenerate-v2` is given. The previous V2 dataset is kept, so it can be restored.
-- V1 files and the original video are never written.
-- If a V1 file changes during the run, the CLI rolls back that run's V2 output. It restores the previous V2 dataset if there was one, and otherwise removes the new V2 files. A refused or failed rollback is reported, and the files are left in place.
-- Exit codes: `0` published; `1` processing failed; `2` refused before processing; `3` model missing or wrong; `4` a V1 file changed (rollback attempted).
+- An existing pose dataset is refused unless `--regenerate-v2` is given. The previous pose dataset is kept, so it can be restored.
+- face data files and the original video are never written.
+- If a face data file changes during the run, the CLI rolls back that run's pose data output. It restores the previous pose dataset if there was one, and otherwise removes the new pose data files. A refused or failed rollback is reported, and the files are left in place.
+- Exit codes: `0` published; `1` processing failed; `2` refused before processing; `3` model missing or wrong; `4` a face data file changed (rollback attempted).
 
 Automated tests use synthetic data and a fake detector. Real-recording validation has not been done.
 
@@ -185,7 +185,7 @@ Automated tests use synthetic data and a fake detector. Real-recording validatio
 | 01 Facial Analysis | Tracking quality, displacement, velocity, acceleration, neutral-face offset, blinks, head pose, jaw and mouth |
 | 02 3D Facial Analysis | 3D landmark view (raw or head-pose compensated), head pose angles, depth span |
 | 03 Audio Analysis | Placeholder. Not implemented |
-| 04 Body Motion | Read-only viewer of existing V2 Pose sessions (pose overlay, visibility threshold, detection timeline, joint table, tracking quality). Shows only sessions that pass the V2 metadata and manifest checks. Does not generate pose data. |
+| 04 Body Motion | Read-only viewer of existing pose data sessions (pose overlay, visibility threshold, detection timeline, joint table, tracking quality). Shows only sessions that pass the pose data metadata and manifest checks. Does not generate pose data. |
 | 05 Dataset Comparison | Compares the processed sessions of one person: summary, blendshape means, distributions, landmark stability |
 | 06 Diagnostics | Tracking checks, interruptions, neutral-frame selection, raw versus compensated landmarks, head rotation, displacement, velocity, acceleration |
 
@@ -209,7 +209,7 @@ Each session folder `datasets/<person>/session-NNN/` contains:
 Each person folder also has `dataset_metadata.json`, which lists the processed sessions with
 their frame counts and frame rates.
 
-The version 2 layout (Pose and V2 metadata, manifest, licence notes) is described in
+The pose data layout (Pose and pose data metadata, manifest, licence notes) is described in
 [docs/dataset_layout.md](docs/dataset_layout.md).
 
 ### Example row (synthetic data, shortened)

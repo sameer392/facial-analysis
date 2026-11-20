@@ -134,7 +134,7 @@ class RefusalTests(P4TestCase):
         self.assertEqual((status, body["code"]), (422, "no_video"))
         self.assertEqual(jobs.service().store.list(), [])
 
-    def test_missing_version_one_data_is_refused(self):
+    def test_missing_face_data_is_refused(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-001" / "facial_data.json").unlink()
         status, body = self.post_job("session-001")
         self.assertEqual((status, body["code"]), (422, "no_face_data"))
@@ -217,7 +217,7 @@ class LifecycleTests(P4TestCase):
         jobs.cancel_job(first["id"])
         self.wait_for(first["id"], ("cancelled",))
 
-    def test_completed_v2_session_needs_regenerate(self):
+    def test_completed_pose_session_needs_regenerate(self):
         original = jobs.session_layout
         jobs.session_layout = lambda _folder: "v2"
         try:
@@ -263,8 +263,8 @@ class RestartTests(P4TestCase):
             store.insert("demo_person", "session-001", "v2_build", False)
 
 
-class V1KindTests(P4TestCase):
-    def test_extraction_refuses_existing_version_one_data(self):
+class FaceKindTests(P4TestCase):
+    def test_extraction_refuses_existing_face_data(self):
         status, body = self.post_job("session-001", kind="v1_extract")
         self.assertEqual((status, body["code"]), (409, "face_data_exists"))
 

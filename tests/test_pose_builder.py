@@ -31,7 +31,7 @@ V1_FILES = {
 }
 
 
-def v1_facial_frames(n=N, missing_face=()):
+def face_facial_frames(n=N, missing_face=()):
     """Synthetic frames in the same shape as the V1 extractor writes."""
     frames = []
     for i in range(n):
@@ -71,23 +71,23 @@ class SessionTestCase(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="v2_builder_"))
         self.session = self.tmp / "datasets" / "demo_person" / "session-001"
         self.session.mkdir(parents=True)
-        self.write_v1()
-        self.v1_hashes = self.hash_v1()
+        self.write_face()
+        self.face_hashes = self.hash_face()
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def write_v1(self, missing_face=()):
+    def write_face(self, missing_face=()):
         for name, data in V1_FILES.items():
             if name == "facial_data.json":
-                data = json.dumps(v1_facial_frames(missing_face=missing_face)).encode("utf-8")
+                data = json.dumps(face_facial_frames(missing_face=missing_face)).encode("utf-8")
             (self.session / name).write_bytes(data)
 
-    def hash_v1(self):
+    def hash_face(self):
         return {name: hashlib.sha256((self.session / name).read_bytes()).hexdigest() for name in V1_FILES}
 
-    def assert_v1_unchanged(self):
-        for name, digest in self.v1_hashes.items():
+    def assert_face_unchanged(self):
+        for name, digest in self.face_hashes.items():
             self.assertEqual(hashlib.sha256((self.session / name).read_bytes()).hexdigest(), digest,
                              f"version 1 file changed: {name}")
 
@@ -115,7 +115,7 @@ class PayloadTests(SessionTestCase):
         np.testing.assert_array_equal(payload.arrays["body/pose_landmarks.npy"], pose.image)
         np.testing.assert_array_equal(payload.arrays["body/pose_world_landmarks.npy"], pose.world)
 
-    def test_facial_landmarks_come_from_the_v1_json(self):
+    def test_facial_landmarks_come_from_the_face_json(self):
         payload = self.build()
         face = payload.arrays["facial/landmarks.npy"]
         self.assertEqual(face.shape, (N, 478, 3))
@@ -165,16 +165,16 @@ class MismatchTests(SessionTestCase):
             self.build(pose=pose_result(n=N - 1))
         self.assertFalse((self.session / "metadata.json").exists())
         self.assertFalse(any(p.name.startswith(".v2") for p in self.session.iterdir()))
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
 
 class WriteIntegrationTests(SessionTestCase):
-    def test_full_session_writes_verifies_and_leaves_v1_untouched(self):
+    def test_full_session_writes_verifies_and_leaves_face_untouched(self):
         payload = self.build(pose=pose_result(missing=(4,)))
         manifest = w.write_v2_session(self.session, payload)
         self.assertEqual(w.verify_manifest(self.session, manifest, check_unexpected=True), [])
         self.assertEqual(s2.session_layout(self.session), "v2")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
     def test_pose_on_disk_keeps_nan_rows_for_missing_detections(self):
         w.write_v2_session(self.session, self.build(pose=pose_result(missing=(4,))))
@@ -189,22 +189,22 @@ class WriteIntegrationTests(SessionTestCase):
         self.assertEqual(s2.session_layout(self.session), "incomplete_v2")
         w.recover_incomplete_v2(self.session)
         self.assertEqual(s2.session_layout(self.session), "v1")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
         w.write_v2_session(self.session, self.build())
         self.assertEqual(s2.session_layout(self.session), "v2")
 
-    def test_rollback_after_regeneration_restores_the_previous_version_two(self):
+    def test_rollback_after_regeneration_restores_the_previous_pose_data(self):
         w.write_v2_session(self.session, self.build())
         w.write_v2_session(self.session, self.build(), regenerate=True)
         w.rollback_v2(self.session)
         self.assertEqual(s2.session_layout(self.session), "v2")  # previous version 2 restored
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
-    def test_rollback_of_the_only_version_two_leaves_version_one(self):
+    def test_rollback_of_the_only_pose_data_leaves_face_data(self):
         w.write_v2_session(self.session, self.build())
         w.rollback_v2(self.session)
         self.assertEqual(s2.session_layout(self.session), "v1")
-        self.assert_v1_unchanged()
+        self.assert_face_unchanged()
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import project_paths as pp  # noqa: E402
 import demo_data  # noqa: E402
-import test_v2_viewer as tv  # noqa: E402
+import test_pose_viewer as tv  # noqa: E402
 from api import catalog, jobs, v1_data, v2_data  # noqa: E402
 import asyncio  # noqa: E402
 import json  # noqa: E402
@@ -57,7 +57,7 @@ class StepTwoTestCase(unittest.TestCase):
         v1_data.clear_cache()
         v2_data.clear_cache()
         demo_data.generate_session(self.tmp, "session-001", demo_data.SESSIONS["session-001"])
-        tv.write_v2(pp.DATASETS_ROOT / "demo_person" / "session-002")
+        tv.write_pose(pp.DATASETS_ROOT / "demo_person" / "session-002")
         for session in ("session-001", "session-002"):
             video = pp.session_video("demo_person", session)
             video.parent.mkdir(parents=True, exist_ok=True)
