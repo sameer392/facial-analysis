@@ -66,6 +66,26 @@ export default function JobsPage() {
     refetchInterval: (query) => (query.state.data?.some((j) => ACTIVE_JOB_STATES.includes(j.state)) ? 2000 : false),
   });
 
+  // Live progress: each active job streams its own updates into the list. Polling stays as a fallback.
+  const activeIds = (jobs.data ?? []).filter((j) => ACTIVE_JOB_STATES.includes(j.state)).map((j) => j.id).join(",");
+  useEffect(() => {
+    if (activeIds === "") return;
+    const sources = activeIds.split(",").map((id) => {
+      const source = new EventSource(`/api/jobs/${id}/events`);
+      source.onmessage = (event) => {
+        const updated = JSON.parse(event.data) as Job;
+        queryClient.setQueryData<Job[]>(["jobs"], (old) => old?.map((j) => (j.id === updated.id ? updated : j)));
+        if (!ACTIVE_JOB_STATES.includes(updated.state)) {
+          source.close();
+          queryClient.invalidateQueries({ queryKey: ["jobs"] });
+        }
+      };
+      source.onerror = () => source.close();
+      return source;
+    });
+    return () => sources.forEach((source) => source.close());
+  }, [activeIds, queryClient]);
+
   // Which sessions each kind can start on, following the script rules. The server checks again.
   const eligible = (layout: string) => {
     if (kind === "face_build") return layout === "none";

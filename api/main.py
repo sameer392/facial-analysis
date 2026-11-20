@@ -11,10 +11,10 @@ printed when the server starts (or set FACIAL_API_TOKEN). The server binds to 12
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from api import catalog, face_data, jobs, manage, pose_data, system
+from api import catalog, face_data, job_events, jobs, manage, pose_data, system
 from api.catalog import ApiError
 
 
@@ -249,3 +249,11 @@ def rename_person(person: str, body: NewNameRequest):
 @app.post("/api/persons/{person}/sessions/{session}/rename", dependencies=[Depends(require_token)])
 def rename_session(person: str, session: str, body: NewNameRequest):
     return manage.rename_session(person, session, body.to)
+
+
+@app.get("/api/jobs/{job_id}/events")
+async def job_progress_events(job_id: str):
+    if jobs.service().store.get(job_id) is None:
+        raise ApiError("not_found", "job not found", 404)
+    return StreamingResponse(job_events.event_stream(job_id), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
