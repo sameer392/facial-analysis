@@ -32,6 +32,8 @@ from hand_tracking import (  # noqa: E402
     track_hands,
 )
 from pose_schema import (  # noqa: E402
+    HAND_GESTURE_EVENTS_FILE,
+    HAND_GESTURE_OBS_FILE,
     HAND_MOTION_COLUMNS,
     HAND_MOTION_FILE,
     HAND_STATUS_FILE,
@@ -63,8 +65,13 @@ def tracking_config() -> dict:
     }
 
 
+CARRIED_HAND_TABLES = (HAND_TRACKS_FILE, HAND_MOTION_FILE, HAND_GESTURE_OBS_FILE, HAND_GESTURE_EVENTS_FILE)
+
+
 def carry_payload(session_dir) -> PoseDataPayload:
-    """Every stream of an existing complete pose data session, as a payload. Nothing is changed."""
+    """Every stream of an existing complete pose data session, as a payload. Nothing is changed.
+    Hand tables that already exist (tracks, motion, gestures) are carried over too, so that a later
+    stage never drops an earlier one."""
     existing = read_pose_session(session_dir)
     session = Path(session_dir)
     status_path = session / HAND_STATUS_FILE
@@ -72,7 +79,12 @@ def carry_payload(session_dir) -> PoseDataPayload:
         raise HandBuildError("the hand status file is missing. Run build_hand_session.py first.")
     status = pd.read_csv(status_path)
     handedness = pd.read_csv(session / "hands" / "handedness.csv")
-    return PoseDataPayload(
+    tables = {}
+    for rel in CARRIED_HAND_TABLES:
+        path = session / rel
+        if path.is_file():
+            tables[rel] = pd.read_csv(path).to_dict("records")
+    payload = PoseDataPayload(
         arrays=dict(existing["arrays"]),
         timeline_rows=existing["timeline"].to_dict("records"),
         handedness_rows=handedness.to_dict("records"),
@@ -80,7 +92,9 @@ def carry_payload(session_dir) -> PoseDataPayload:
         quality=dict(existing["quality"]),
         metadata=existing["metadata"],
         hand_status_rows=status.to_dict("records"),
+        hand_tables=tables or None,
     )
+    return payload
 
 
 def analyse_hand_payload(session_dir) -> PoseDataPayload:
@@ -116,7 +130,11 @@ def analyse_hand_payload(session_dir) -> PoseDataPayload:
 
     track_rows = [{c: e.get(c, "") for c in HAND_TRACK_COLUMNS} for e in events]
     motion_out = [{c: r[c] for c in HAND_MOTION_COLUMNS} for r in motion]
+    # Tracking is recomputed here, so any gesture output from an earlier run no longer matches it and is dropped.
     payload.hand_tables = {HAND_TRACKS_FILE: track_rows, HAND_MOTION_FILE: motion_out}
+    payload.quality.get("hands", {}).pop("gestures", None)
+    payload.metadata.get("configuration", {}).get("hands", {}).pop("gestures", None)
+    payload.metadata.get("streams", {}).get("hands", {}).pop("gestures", None)
 
     payload.quality.setdefault("hands", {})["tracking"] = q
     meta.setdefault("configuration", {}).setdefault("hands", {})["tracking"] = tracking_config()

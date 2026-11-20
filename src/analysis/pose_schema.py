@@ -104,13 +104,29 @@ HAND_MOTION_COLUMNS = (
     "direction_deg", "orientation_deg", "orientation_change_deg", "openness", "motion_reason",
 ) + tuple(f"{f}_tip_{a}_px" for f in HAND_FINGER_NAMES for a in ("x", "y")) + HAND_ANGLE_COLUMNS
 
+# Gesture recognition (H3): frame-level observations and stable events. Rules are in analysis/gesture_rules.py.
+HAND_GESTURE_OBS_FILE = "hands/gesture_observations.csv"
+HAND_GESTURE_OBS_COLUMNS = (
+    "track_id", "frame", "timestamp_ms", "label", "frame_class", "reason", "quality",
+    "thumb_state", "index_state", "middle_state", "ring_state", "pinky_state",
+    "margin", "event_id",
+)
+HAND_GESTURE_EVENTS_FILE = "hands/gesture_events.csv"
+HAND_GESTURE_EVENT_COLUMNS = (
+    "event_id", "track_id", "label", "gesture", "start_frame", "end_frame", "start_timestamp_ms",
+    "end_timestamp_ms", "duration_ms", "supporting_observations", "bridged_observations",
+    "support_quality", "margin_median", "end_reason",
+)
+
 # Header of every hand table the writer accepts, and the tables whose row count is not the frame count.
 HAND_TABLE_HEADERS = {
     HAND_STATUS_FILE: HAND_STATUS_COLUMNS,
     HAND_TRACKS_FILE: HAND_TRACK_COLUMNS,
     HAND_MOTION_FILE: HAND_MOTION_COLUMNS,
+    HAND_GESTURE_OBS_FILE: HAND_GESTURE_OBS_COLUMNS,
+    HAND_GESTURE_EVENTS_FILE: HAND_GESTURE_EVENT_COLUMNS,
 }
-HAND_VARIABLE_LENGTH_TABLES = (HAND_TRACKS_FILE, HAND_MOTION_FILE)
+HAND_VARIABLE_LENGTH_TABLES = (HAND_TRACKS_FILE, HAND_MOTION_FILE, HAND_GESTURE_OBS_FILE, HAND_GESTURE_EVENTS_FILE)
 
 HANDEDNESS_COLUMNS = (
     "frame", "timestamp_ms",
