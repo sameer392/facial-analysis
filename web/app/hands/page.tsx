@@ -1,19 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiFailure } from "../lib/api";
 import { Card, Empty, ErrorState, Loading } from "../components/ui";
 import { HandSessionSelector } from "../components/hand-session-selector";
 import { HandJobPanel } from "../components/hand-job-panel";
 import { HandLandmarkViewer } from "../components/hand-landmark-viewer";
+import { HandVideoPlayer, type PresentedFrame } from "../components/hand-video-player";
 import { HandMotionCharts } from "../components/hand-motion-charts";
 import { HandGesturePanel } from "../components/hand-gesture-panel";
 import { HandQualityPanel } from "../components/hand-quality-panel";
 
 const SECTIONS: [string, string][] = [
+  ["video", "Video playback"],
   ["processing", "Processing"],
-  ["frames", "Frames and landmarks"],
+  ["frames", "Frame review"],
   ["motion", "Motion"],
   ["gestures", "Gestures"],
   ["quality", "Dataset quality"],
@@ -22,6 +24,8 @@ const SECTIONS: [string, string][] = [
 export default function HandsPage() {
   const [person, setPerson] = useState("");
   const [session, setSession] = useState("");
+  // Latest presented video frame (mediaTime), kept for the landmark overlay (H8.4). Updating it does not re-render.
+  const presentedRef = useRef<PresentedFrame>(null);
 
   const sessions = useQuery({
     queryKey: ["sessions", person],
@@ -76,6 +80,18 @@ export default function HandsPage() {
           <div className="mt-4"><Empty title="No hand analysis yet" detail={pose ? "Start it below." : "This session needs pose data first."} /></div>
         ) : null}
       </section>
+
+      {session !== "" ? (
+        <section id="video" className="scroll-mt-6">
+          <HandVideoPlayer
+            key={`${person}/${session}`}
+            person={person}
+            session={session}
+            fpsHint={summary.data?.source.fps ?? null}
+            presentedRef={presentedRef}
+          />
+        </section>
+      ) : null}
 
       {session !== "" ? (
         <section id="processing" className="scroll-mt-6">

@@ -556,6 +556,9 @@ export const api = {
     get<HandGestureQuality>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/quality/gestures`),
   handValidation: (person: string, session: string) =>
     get<HandValidation>(`/persons/${enc(person)}/sessions/${enc(session)}/hands/validation`),
+  /** The original recording, streamed by the API with HTTP Range support (H8.2). Read-only; localhost only. */
+  videoUrl: (person: string, session: string) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/video`,
   handOverlayUrl: (person: string, session: string, index: number) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/hands/frames/${index}/overlay.jpg`,
   clearJobHistory: (token: string, confirm: string) =>
