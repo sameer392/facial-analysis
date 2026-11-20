@@ -72,6 +72,7 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
   const [pointSize, setPointSize] = useState(2);
 
   const summary = useQuery({ queryKey: ["face-summary", person, session], queryFn: () => api.faceSummary(person, session) });
+  const video = useQuery({ queryKey: ["face-video", person, session], queryFn: () => api.faceVideo(person, session) });
   const series = useQuery({ queryKey: ["face-series", person, session], queryFn: () => api.faceSeries(person, session, ALL_FIELDS) });
   const blinks = useQuery({ queryKey: ["face-blinks", person, session], queryFn: () => api.faceBlinks(person, session) });
   const raw = useQuery({
@@ -124,6 +125,10 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
   }, [series.data]);
 
   const q = summary.data?.quality;
+  const detectedFrames = series.data ? series.data.face_detected.filter((v) => v === true).length : null;
+  const faceNow = series.data ? series.data.face_detected[frame] === true : null;
+  const timeNow = series.data ? series.data.time_s[frame] : null;
+  const landmarksNow = raw.data ? raw.data.points.filter((p) => p[0] != null).length : null;
   const pct = (v: number | null | undefined) => (v == null ? "n/a" : `${(v * 100).toFixed(1)} %`);
   const frames = summary.data?.frames ?? 1;
 
@@ -147,6 +152,16 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
       <section id="summary" className="scroll-mt-6">
         {summary.isPending ? <Loading label="Loading summary…" /> : null}
         {summary.isError ? <ErrorState message={summary.error.message} code={(summary.error as { code?: string }).code} /> : null}
+        {video.data ? (
+          <Card title="Video">
+            <dl className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+              <div><dt className="text-[var(--muted)]">Video FPS</dt><dd className="text-xl font-semibold">{video.data.fps ? video.data.fps.toFixed(2) : "Unknown"}</dd></div>
+              <div><dt className="text-[var(--muted)]">Video frames</dt><dd className="text-xl font-semibold">{video.data.frames.toLocaleString()}</dd></div>
+              <div><dt className="text-[var(--muted)]">Duration</dt><dd className="text-xl font-semibold">{video.data.duration_s == null ? "Unknown" : `${video.data.duration_s.toFixed(2)} sec`}</dd></div>
+              <div><dt className="text-[var(--muted)]">Frames with face</dt><dd className="text-xl font-semibold">{detectedFrames == null ? "n/a" : `${detectedFrames.toLocaleString()} / ${(series.data?.time_s.length ?? 0).toLocaleString()}`}</dd></div>
+            </dl>
+          </Card>
+        ) : null}
         {q ? (
           <Card title="Summary and tracking quality">
             <dl className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
@@ -207,7 +222,11 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
               <img src={api.faceOverlayUrl(person, session, frame, mode, opacity, thickness, pointSize)} alt={`Landmark overlay for frame ${frame}`} className="w-full rounded border border-[var(--border)]" />
             </figure>
           </div>
-          <p className="mt-2 text-xs text-[var(--muted)]">The same frame is used for the landmark views further down.</p>
+          <p className="mt-2 text-sm">
+            Frame {frame}{timeNow == null ? "" : ` · ${timeNow.toFixed(3)} seconds`} · Face detected: {faceNow == null ? "n/a" : faceNow ? "yes" : "no"}
+            {landmarksNow == null ? "" : ` · Landmarks: ${landmarksNow}`}
+          </p>
+          <p className="mt-1 text-xs text-[var(--muted)]">The same frame is used for the landmark views further down.</p>
         </Card>
       </section>
 

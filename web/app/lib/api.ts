@@ -251,6 +251,14 @@ async function send<T>(method: "POST" | "PUT", path: string, token: string, body
 
 export type DeleteResult = { deleted: boolean };
 
+export type VideoFacts = {
+  fps: number | null;
+  frames: number;
+  width: number;
+  height: number;
+  duration_s: number | null;
+};
+
 export type FaceTopology = {
   mesh: { edges: number[][]; colour: string };
   regions: Record<string, { edges: number[][]; colour: string }>;
@@ -303,6 +311,8 @@ export const api = {
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
   faceTopology: () => get<FaceTopology>("/face/topology"),
+  faceVideo: (person: string, session: string) =>
+    get<VideoFacts>(`/persons/${enc(person)}/sessions/${enc(session)}/face/video`),
   faceOriginalUrl: (person: string, session: string, index: number) =>
     `/api/persons/${enc(person)}/sessions/${enc(session)}/face/frames/${index}/original.jpg`,
   faceOverlayUrl: (person: string, session: string, index: number, mode: string, opacity: number, thickness: number, pointSize: number) =>
