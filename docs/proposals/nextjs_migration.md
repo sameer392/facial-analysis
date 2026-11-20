@@ -147,7 +147,7 @@ This is a single-user local application, but the risks are real because it expos
 
 ## 11. Migration phases and acceptance criteria
 
-Streamlit remains available on port 8501 throughout. The Next.js app runs on port 3000. Both read the same datasets.
+During coexistence, Streamlit ran on port 8501 and the Next.js app on port 3000; both read the same datasets. Streamlit was removed in phase P7, so the Next.js app (port 3000) and the API (port 8000) are now the only interface. The phase table below is kept as the record of the plan.
 
 | Phase | Work | Acceptance criteria |
 |---|---|---|
