@@ -7,11 +7,9 @@ by those scripts, never by this module.
 Kinds:
   pose_build     src/extraction/build_pose_session.py  (pose data; --regenerate replaces it)
   face_build     src/analysis/build_face_data.py      (face data: extraction then analysis; refuses existing data)
-  face_extract   src/analysis/extract_faces.py        (face data extraction only; refuses existing data)
-  face_analyse   src/analysis/analyze_faces.py        (blendshape and motion outputs; --force regenerates)
 
 Lifecycle: queued -> running -> succeeded | failed | cancelled, and interrupted when the API restarts while a
-job is active. Progress is per frame for face_extract (from the script's "Processed" lines) and per stage for the
+job is active. Progress for face data is per frame (from the extraction's "Processed" lines) and per stage for the
 other kinds.
 
 Concurrency: one active job per session across all kinds, enforced by a unique index. A session with the
@@ -42,16 +40,13 @@ import project_paths as pp  # noqa: E402
 from pose_schema import session_layout  # noqa: E402
 from pose_writer import LOCK_FILE, PREVIOUS_PREFIX, STAGING_PREFIX  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
-from facial_analyzer import make_session, motion_output_paths  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
-KINDS = ("face_build", "pose_build", "face_extract", "face_analyse")
+KINDS = ("face_build", "pose_build")
 # Older job codes, still accepted in requests and mapped when rows are read.
 SCRIPTS = {
     "pose_build": ROOT / "src" / "extraction" / "build_pose_session.py",
     "face_build": ROOT / "src" / "analysis" / "build_face_data.py",
-    "face_extract": ROOT / "src" / "analysis" / "extract_faces.py",
-    "face_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
 }
 ACTIVE = ("queued", "running")
 LEFTOVER_PREFIXES = (STAGING_PREFIX, PREVIOUS_PREFIX)
@@ -116,12 +111,8 @@ class JobStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
-            # Rows written before the job codes were renamed. Idempotent: it does nothing once they are updated.
-            conn.execute(
-                "UPDATE jobs SET kind = CASE kind WHEN 'v2_build' THEN 'pose_build' "
-                "WHEN 'v1_extract' THEN 'face_extract' WHEN 'v1_analyse' THEN 'face_analyse' END "
-                "WHERE kind IN ('v2_build', 'v1_extract', 'v1_analyse')"
-            )
+            # Rows written with the older pose code. Idempotent: it does nothing once they are updated.
+            conn.execute("UPDATE jobs SET kind = 'pose_build' WHERE kind = 'v2_build'")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=10)
@@ -186,6 +177,30 @@ def _row(row) -> dict:
     return d
 
 
+def _extract_progress(line: str, state: dict) -> tuple[str, float] | None:
+    """Progress lines printed by the face extraction step."""
+    m = _TOTAL_RE.match(line)
+    if m:
+        state["total"] = int(m.group(1))
+        return "extract", 0.0
+    m = _PROCESSED_RE.match(line)
+    if m:
+        total = state.get("total")
+        fraction = min(int(m.group(1)) / total, 0.99) if total else 0.0
+        return "extract", fraction
+    if line.startswith("Processing completed"):
+        return "publish", 0.99
+    return None
+
+
+def _analyse_progress(line: str) -> tuple[str, float] | None:
+    """Progress lines printed by the face analysis step."""
+    for marker, stage, fraction in FACE_ANALYSE_MARKERS:
+        if marker in line:
+            return stage, fraction
+    return None
+
+
 def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | None:
     """Stage and progress (0 to 1) for one line of a worker's output, or None if the line says nothing new.
 
@@ -198,31 +213,14 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
         return None
     if kind == "face_build":
         # extraction is the first 80 per cent of the run, analysis the last 20
-        update = parse_progress("face_extract", line, state)
+        update = _extract_progress(line, state)
         if update:
             return update[0], update[1] * 0.8
-        update = parse_progress("face_analyse", line, state)
+        update = _analyse_progress(line)
         if update:
             return update[0], 0.8 + update[1] * 0.2
         return None
-    if kind == "face_extract":
-        m = _TOTAL_RE.match(line)
-        if m:
-            state["total"] = int(m.group(1))
-            return "extract", 0.0
-        m = _PROCESSED_RE.match(line)
-        if m:
-            total = state.get("total")
-            fraction = min(int(m.group(1)) / total, 0.99) if total else 0.0
-            return "extract", fraction
-        if line.startswith("Processing completed"):
-            return "publish", 0.99
-        return None
-    if kind == "face_analyse":
-        for marker, stage, fraction in FACE_ANALYSE_MARKERS:
-            if marker in line:
-                return stage, fraction
-        return None
+    return None
     return None
 
 
@@ -236,7 +234,7 @@ def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
         if p.name == LOCK_FILE or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
     frames = dataset_dir / "frames"
-    if kind in ("face_build", "face_extract") and not (dataset_dir / "facial_data.json").exists() \
+    if kind == "face_build" and not (dataset_dir / "facial_data.json").exists() \
             and frames.is_dir() and any(frames.iterdir()):
         names.append("frames/ (partly written)")
     return names
@@ -248,8 +246,6 @@ def default_command(job: dict) -> list[str]:
     if job["regenerate"]:
         if kind == "pose_build":
             cmd.append("--regenerate")
-        elif kind == "face_analyse":
-            cmd.append("--force")
     return cmd
 
 
@@ -378,7 +374,7 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
             raise ApiError("no_face_data", "run the face extraction for this session first", 422)
         if session_layout(dataset) == "pose" and not regenerate:
             raise ApiError("pose_exists", "pose data already exists; set regenerate to replace it", 409)
-    elif kind in ("face_build", "face_extract"):
+    elif kind == "face_build":
         frames = dataset / "frames"
         if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):
             raise ApiError("face_data_exists", "face data already exists; extraction never overwrites it", 409)
@@ -386,13 +382,6 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
             verify_model(get_spec("face"))
         except Exception as exc:  # missing or changed model file: refuse, never load it
             raise ApiError("model_integrity", f"the face model failed its check: {exc}", 503) from None
-    elif kind == "face_analyse":
-        if not (dataset / "facial_data.json").is_file():
-            raise ApiError("no_face_data", "run the face extraction for this session first", 422)
-        outputs = [dataset / "facial_blendshapes.csv", *motion_output_paths(make_session(person, session))]
-        existing = [p.name for p in outputs if p.exists()]
-        if existing and not regenerate:
-            raise ApiError("outputs_exist", f"analysis outputs exist ({', '.join(existing)}); set regenerate to replace them", 409)
 
 
 def create_job(person: str, session: str, kind: str, regenerate: bool) -> dict:

@@ -87,10 +87,10 @@ class JobCodeTests(MigrationTestCase):
         from api.main import app
 
         status, body = call(app, "POST", "/api/jobs",
-                            {"person": "demo_person", "session": "session-001", "kind": "face_analyse",
+                            {"person": "demo_person", "session": "session-001", "kind": "pose_build",
                              "regenerate": True}, token=TOKEN)
         self.assertEqual(status, 202)
-        self.assertEqual(body["kind"], "face_analyse")
+        self.assertEqual(body["kind"], "pose_build")
         jobs.service().runner.cancel(body["id"])
 
     def test_old_codes_are_refused(self):
@@ -115,7 +115,7 @@ class JobCodeTests(MigrationTestCase):
     def test_worker_command_uses_the_renamed_scripts(self):
         base = {"person": "demo_person", "session": "session-001", "regenerate": True}
         self.assertIn("build_pose_session.py", str(jobs.default_command({**base, "kind": "pose_build"})[1]))
-        self.assertIn("--force", jobs.default_command({**base, "kind": "face_analyse"}))
+        self.assertNotIn("--force", jobs.default_command({**base, "kind": "face_build"}))
 
 
 class ModuleAndClassNameTests(unittest.TestCase):

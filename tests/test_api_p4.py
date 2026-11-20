@@ -257,57 +257,42 @@ class RestartTests(P4TestCase):
 
 
 class FaceKindTests(P4TestCase):
+    def test_flags_only_affect_the_pose_build(self):
+        base = {"person": "demo_person", "session": "session-001", "regenerate": True}
+        self.assertIn("--regenerate", jobs.default_command({**base, "kind": "pose_build"}))
+        self.assertEqual(jobs.default_command({**base, "kind": "face_build"})[2:], ["demo_person", "session-001"])
+
+    def test_old_single_step_kinds_are_refused(self):
+        for old in ("face_extract", "face_analyse"):
+            with self.subTest(kind=old):
+                status, body = self.post_job("session-001", kind=old)
+                self.assertEqual((status, body["code"]), (400, "invalid_request"))
+
     def test_extraction_refuses_existing_face_data(self):
-        status, body = self.post_job("session-001", kind="face_extract")
+        status, body = self.post_job("session-001", kind="face_build")
         self.assertEqual((status, body["code"]), (409, "face_data_exists"))
 
     def test_extraction_refuses_when_the_face_model_fails_its_check(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-003" / "facial_data.json").unlink()
         with mock.patch.object(jobs, "verify_model", side_effect=jobs.ModelIntegrityError("hash mismatch")):
-            status, body = self.post_job("session-003", kind="face_extract")
+            status, body = self.post_job("session-003", kind="face_build")
         self.assertEqual((status, body["code"]), (503, "model_integrity"))
         self.assertEqual(jobs.service().store.list(), [])
-
-    def test_analysis_runs_and_succeeds(self):
-        status, job = self.post_job("session-001", kind="face_analyse")
-        self.assertEqual(status, 202)
-        done = self.wait_for(job["id"], ("succeeded", "failed"))
-        self.assertEqual(done["kind"], "face_analyse")
-        self.assertEqual(done["state"], "succeeded")
-
-    def test_analysis_refuses_existing_outputs_unless_regenerate(self):
-        (pp.DATASETS_ROOT / "demo_person" / "session-002" / "facial_blendshapes.csv").write_text("x", encoding="utf-8")
-        status, body = self.post_job("session-002", kind="face_analyse")
-        self.assertEqual((status, body["code"]), (409, "outputs_exist"))
 
     def test_one_active_job_per_session_across_kinds(self):
         status, first = self.post_job("session-003", kind="pose_build")
         self.assertEqual(status, 202)
         self.wait_for(first["id"], ("running",))
-        status, body = self.post_job("session-003", kind="face_analyse")
+        status, body = self.post_job("session-003", kind="pose_build")
         self.assertEqual((status, body["code"]), (409, "job_active"))
         jobs.cancel_job(first["id"])
         self.wait_for(first["id"], ("cancelled",))
-
-    def test_regenerate_adds_the_matching_flag(self):
-        base = {"person": "demo_person", "session": "session-001", "regenerate": True}
-        self.assertIn("--force", jobs.default_command({**base, "kind": "face_analyse"}))
-        self.assertIn("--regenerate", jobs.default_command({**base, "kind": "pose_build"}))
-        self.assertNotIn("--force", jobs.default_command({**base, "kind": "face_extract"}))
 
     def test_worker_output_is_unbuffered(self):
         self.assertEqual(jobs.worker_env()["PYTHONUNBUFFERED"], "1")
 
 
 class ProgressParsingTests(unittest.TestCase):
-    def test_extraction_progress_is_per_frame(self):
-        state = {}
-        self.assertEqual(jobs.parse_progress("face_extract", "Total frames: 200", state), ("extract", 0.0))
-        self.assertEqual(jobs.parse_progress("face_extract", "Processed: 100", state), ("extract", 0.5))
-        self.assertEqual(jobs.parse_progress("face_extract", "Processed: 300", state), ("extract", 0.99))
-        self.assertEqual(jobs.parse_progress("face_extract", "Processing completed!", state), ("publish", 0.99))
-        self.assertIsNone(jobs.parse_progress("face_extract", "FPS: 30.0", state))
-
     def test_build_markers_use_the_current_wording(self):
         self.assertEqual(jobs.parse_progress("pose_build", "Building the pose data payload...", {}), ("assemble", 4 / 6))
         self.assertEqual(jobs.parse_progress("pose_build", "Publishing the pose data...", {}), ("publish", 5 / 6))
@@ -315,20 +300,23 @@ class ProgressParsingTests(unittest.TestCase):
         # the older wording is no longer read as a progress marker
         self.assertIsNone(jobs.parse_progress("pose_build", "pose data published: /x", {}))
 
-    def test_analysis_and_build_markers(self):
-        self.assertEqual(jobs.parse_progress("face_analyse", "CSV created: x", {}), ("assemble", 0.25))
-        self.assertEqual(jobs.parse_progress("face_analyse", "Metadata: x", {}), ("verify", 0.9))
-        self.assertEqual(jobs.parse_progress("pose_build", "Extracting pose landmarks...", {}), ("extract", 3 / 6))
-        self.assertIsNone(jobs.parse_progress("pose_build", "unrelated line", {}))
+    def test_face_build_progress_runs_extraction_then_analysis(self):
+        state = {}
+        self.assertEqual(jobs.parse_progress("face_build", "Total frames: 200", state), ("extract", 0.0))
+        self.assertEqual(jobs.parse_progress("face_build", "Processed: 100", state), ("extract", 0.4))
+        self.assertEqual(jobs.parse_progress("face_build", "Processing completed!", state), ("publish", 0.792))
+        self.assertEqual(jobs.parse_progress("face_build", "CSV created: x", {}), ("assemble", 0.8 + 0.25 * 0.2))
+        self.assertEqual(jobs.parse_progress("face_build", "Metadata: x", {}), ("verify", 0.8 + 0.9 * 0.2))
+        self.assertIsNone(jobs.parse_progress("face_build", "FPS: 30.0", state))
 
     def test_partly_written_frames_are_reported_for_extraction(self):
         tmp = Path(tempfile.mkdtemp(prefix="leftover_"))
         try:
             (tmp / "frames").mkdir()
             (tmp / "frames" / "frame_000000.jpg").write_bytes(b"x")
-            self.assertEqual(jobs.leftovers(tmp, "face_extract"), ["frames/ (partly written)"])
+            self.assertEqual(jobs.leftovers(tmp, "face_build"), ["frames/ (partly written)"])
             (tmp / "facial_data.json").write_text("[]", encoding="utf-8")
-            self.assertEqual(jobs.leftovers(tmp, "face_extract"), [])
+            self.assertEqual(jobs.leftovers(tmp, "face_build"), [])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 

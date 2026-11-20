@@ -91,7 +91,7 @@ class LogTests(P5TestCase):
 
     def test_log_list_and_tail_for_a_job(self):
         store = jobs.service().store
-        job = store.insert("demo_person", "session-001", "face_analyse", False)
+        job = store.insert("demo_person", "session-001", "face_build", False)
         log = jobs.service().runner.log_path(job["id"])
         log.write_text("\n".join(f"line {i} at {ROOT}" for i in range(5)) + "\n", encoding="utf-8")
         listed = system.job_logs()

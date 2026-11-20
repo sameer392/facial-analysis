@@ -172,7 +172,7 @@ class DeleteTests(ManageTestCase):
     def test_delete_is_refused_while_a_job_runs_on_the_session(self):
         self.add_session("session-001", with_dataset=True)
         store = jobs.service().store
-        store.insert("demo_person", "session-001", "face_analyse", True)
+        store.insert("demo_person", "session-001", "face_build", True)
         with self.assertRaises(ApiError) as ctx:
             manage.delete_dataset("demo_person", "session-001", "demo_person/session-001")
         self.assertEqual(ctx.exception.code, "job_active")
@@ -182,9 +182,9 @@ class DeleteTests(ManageTestCase):
 class JobHistoryTests(ManageTestCase):
     def test_clear_history_needs_the_phrase_and_keeps_active_jobs(self):
         store = jobs.service().store
-        done = store.insert("demo_person", "session-001", "face_analyse", False)
+        done = store.insert("demo_person", "session-001", "face_build", False)
         store.update(done["id"], state="succeeded")
-        active = store.insert("demo_person", "session-002", "face_analyse", False)
+        active = store.insert("demo_person", "session-002", "face_build", False)
         store.update(active["id"], state="running")
         log = jobs.service().runner.log_path(done["id"])
         log.write_text("finished\n", encoding="utf-8")
