@@ -62,8 +62,10 @@ def _meta(dataset: Path) -> dict:
 
 
 def _hands(dataset: Path) -> dict:
+    """The hand stream record. Only a complete stream counts: a pose build writes the hand stream as
+    "absent" or "not run", which is not hand analysis."""
     hands = _meta(dataset).get("streams", {}).get("hands")
-    if not hands:
+    if not isinstance(hands, dict) or hands.get("status") != "complete":
         raise ApiError("no_hand_analysis", "no hand analysis for this session yet", 404)
     return hands
 
@@ -111,7 +113,7 @@ def summary(person: str, session: str) -> dict:
     meta = _meta(dataset)
     out = {
         "session_id": session,
-        "streams": {k: v.get("status") for k, v in hands.items() if isinstance(v, dict) and "status" in v},
+        "streams": {"hands": hands.get("status")},
         "tracking": bool(hands.get("tracking")),
         "gestures": bool(hands.get("gestures")),
         "source": {k: meta.get("source", {}).get(k) for k in ("fps", "frame_count", "width", "height")},

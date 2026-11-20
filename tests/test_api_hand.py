@@ -312,6 +312,13 @@ class HandReadTests(tcl.GestureCase):
         status, body = self.get("summary")
         self.assertEqual((status, body["code"]), (404, "no_hand_analysis"))
 
+    def test_placeholder_absent_hand_stream_is_not_hand_analysis(self):
+        meta = json.loads((self.dataset / "metadata.json").read_text())
+        meta["streams"]["hands"] = {"detected_frames": 0, "status": "absent"}
+        (self.dataset / "metadata.json").write_text(json.dumps(meta))
+        status, body = self.get("summary")
+        self.assertEqual((status, body["code"]), (404, "no_hand_analysis"))
+
     def test_corrupt_table_is_reported_without_internal_detail(self):
         (self.dataset / "hands" / "tracks.csv").write_bytes(b"\xff\xfe\x00bad")
         status, body = self.get("tracks", "offset=0&limit=5")
