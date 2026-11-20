@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { EChartsOption } from "echarts";
 import { api, type JointRow, type TimelineRow } from "../../../../../lib/api";
 import { Card, ErrorState, Loading } from "../../../../../components/ui";
@@ -25,6 +25,8 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
     queryKey: ["pose-quality", person, session, frame, threshold],
     queryFn: () => api.poseQuality(person, session, frame, threshold),
     enabled: info.isSuccess,
+    // keep the last frame's figures on screen while the next frame loads, so playback does not flash "Loading"
+    placeholderData: keepPreviousData,
   });
 
   const frames = info.data?.frames ?? 0;
