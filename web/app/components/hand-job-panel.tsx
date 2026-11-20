@@ -34,6 +34,15 @@ export function HandJobPanel({
 }) {
   const queryClient = useQueryClient();
   const [token, , tokenLoaded] = useApiToken();
+
+  // Every cached hand query for this session. Called when a job ends, so no page keeps data from before a run.
+  // That includes the validation result, which is otherwise cached indefinitely.
+  const refreshHandData = () => {
+    queryClient.invalidateQueries({
+      predicate: (q) => typeof q.queryKey[0] === "string" && String(q.queryKey[0]).startsWith("hand") &&
+        q.queryKey[1] === person && q.queryKey[2] === session,
+    });
+  };
   const [regenerate, setRegenerate] = useState(false);
   const hasOutputs = Boolean(summary && (summary.streams.hands ?? "") !== "");
 
@@ -58,12 +67,23 @@ export function HandJobPanel({
       if (!ACTIVE_JOB_STATES.includes(updated.state)) {
         source.close();
         queryClient.invalidateQueries({ queryKey: ["jobs"] });
-        queryClient.invalidateQueries({ queryKey: ["hand-summary", person, session] });
+        refreshHandData();
       }
     };
     source.onerror = () => source.close();
     return () => source.close();
+    // refreshHandData depends only on the query client and the session identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, queryClient, person, session]);
+
+  // A job that finished while this page was open (polling path) also refreshes the cached hand data.
+  const lastState = current?.state ?? "";
+  useEffect(() => {
+    if (lastState === "succeeded" || lastState === "failed" || lastState === "cancelled" || lastState === "interrupted") {
+      refreshHandData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastState, current?.id]);
 
   const create = useMutation({
     mutationFn: () => api.createJob(token, { kind: "hand_build", person, session, regenerate }),

@@ -450,7 +450,7 @@ def _check_tracking(session: Path, meta, status, ts, arrays, report: Report):
             "events": Counter(tracks["event"]),
             "interruptions": int((tracks["event"] == "interrupted").sum()),
             "reacquisitions": int((tracks["event"] == "reacquired").sum()),
-            "uncertain_links": int(tracks["uncertain_reason"].fillna("").astype(bool).sum()),
+            "uncertain_links": int(tracks["uncertain_reason"].apply(lambda v: isinstance(v, str) and v != "").sum()),
             "terminations_by_reason": dict(Counter(tracks.loc[tracks["event"] == "terminated", "reason"])),
             "missing_observations": int(sum(
                 1 for (lab, f), s in st_of.items() if s not in USABLE_STATUSES and f in set(ts_of))),
