@@ -77,14 +77,16 @@ export function ConfirmDialog({
   );
 }
 
-const VALID_NAME = /^[a-z0-9_-]+$/;
+const PERSON_NAME = /^[a-z0-9_-]+$/;
+const SESSION_NAME = /^session-\d{3}$/;
 
 /** Asks for a new name. The name rules are checked here and again by the server. */
 export function RenameDialog({
-  title, current, pending = false, error, onClose, onConfirm,
+  title, current, kind = "person", pending = false, error, onClose, onConfirm,
 }: {
   title: string;
   current: string;
+  kind?: "person" | "session";
   pending?: boolean;
   error?: unknown;
   onClose: () => void;
@@ -92,7 +94,11 @@ export function RenameDialog({
 }) {
   const [token, , loaded] = useApiToken();
   const [name, setName] = useState("");
-  const valid = VALID_NAME.test(name) && name !== current;
+  const rule = kind === "session" ? SESSION_NAME : PERSON_NAME;
+  const hint = kind === "session"
+    ? "A recording name is session- followed by three digits, for example session-004."
+    : "Use lowercase letters, numbers, hyphens or underscores.";
+  const valid = rule.test(name) && name !== current;
   const ready = loaded && token !== "" && valid && !pending;
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="rename-title"
@@ -101,8 +107,8 @@ export function RenameDialog({
       <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-white p-5 shadow-lg dark:bg-slate-900">
         <h2 id="rename-title" className="text-lg font-semibold">{title}</h2>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Current name: <code className="font-mono">{current}</code>. Use lowercase letters, numbers, hyphens or underscores.
-          A recording with processed data must have its data deleted first.
+          Current name: <code className="font-mono">{current}</code>. {hint}
+          {kind === "session" ? " A recording with processed data must have its data deleted first." : " A person with processed data must have its data deleted first."}
         </p>
         <div className="mt-4 flex flex-col gap-3">
           <NeedsToken token={token} loaded={loaded} />

@@ -90,6 +90,7 @@ export default function RecordingsPage() {
       {renaming ? (
         <RenameDialog
           title="Rename this recording?"
+          kind="session"
           current={renaming.session}
           pending={rename.isPending}
           error={rename.isError ? rename.error : undefined}

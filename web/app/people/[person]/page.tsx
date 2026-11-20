@@ -183,6 +183,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
       {renaming ? (
         <RenameDialog
           title="Rename this recording?"
+          kind="session"
           current={renaming}
           pending={rename.isPending}
           error={rename.isError ? rename.error : undefined}
