@@ -19,6 +19,7 @@ writer lock (.pose-lock) present is refused. Mutating routes require the API tok
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import re
 import secrets
@@ -42,12 +43,20 @@ from pose_writer import LOCK_FILE, PREVIOUS_PREFIX, STAGING_PREFIX  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
-KINDS = ("face_build", "pose_build")
+KINDS = ("face_build", "pose_build", "hand_build")
 # Older job codes, still accepted in requests and mapped when rows are read.
 SCRIPTS = {
     "pose_build": ROOT / "src" / "extraction" / "build_pose_session.py",
     "face_build": ROOT / "src" / "analysis" / "build_face_data.py",
+    "hand_build": ROOT / "src" / "extraction" / "build_hand_pipeline.py",
 }
+HAND_STAGE_MARKERS = (
+    ("Stage 1 of 4", "hand landmarks", 0.0),
+    ("Stage 2 of 4", "hand tracking", 0.25),
+    ("Stage 3 of 4", "gestures", 0.5),
+    ("Stage 4 of 4", "validation", 0.75),
+    ("Hand Motion pipeline complete", "validation", 1.0),
+)
 ACTIVE = ("queued", "running")
 LEFTOVER_PREFIXES = (STAGING_PREFIX, PREVIOUS_PREFIX)
 
@@ -211,6 +220,11 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
             if marker in line:
                 return stage, (POSE_STAGES.index(stage) + 1) / len(POSE_STAGES)
         return None
+    if kind == "hand_build":
+        for marker, stage, fraction in HAND_STAGE_MARKERS:
+            if marker in line:
+                return stage, fraction
+        return None
     if kind == "face_build":
         # extraction is the first 80 per cent of the run, analysis the last 20
         update = _extract_progress(line, state)
@@ -244,7 +258,7 @@ def default_command(job: dict) -> list[str]:
     kind = job["kind"]
     cmd = [sys.executable, str(SCRIPTS[kind]), job["person"], job["session"]]
     if job["regenerate"]:
-        if kind == "pose_build":
+        if kind in ("pose_build", "hand_build"):
             cmd.append("--regenerate")
     return cmd
 
@@ -380,6 +394,15 @@ def token_ok(presented: str | None) -> bool:
     return presented is not None and hmac.compare_digest(presented, service().token)
 
 
+def _hand_stream_state(dataset: Path) -> bool:
+    """True when the session metadata already records a hand stream (any stage)."""
+    try:
+        meta = json.loads((dataset / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return bool(meta.get("streams", {}).get("hands"))
+
+
 def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     """The same refusals as the scripts, checked before anything is queued."""
     if kind not in KINDS:
@@ -394,7 +417,17 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     if (dataset / LOCK_FILE).exists():
         raise ApiError("writer_lock_present", "the writer lock is present; another run may be active or interrupted", 409)
 
-    if kind == "pose_build":
+    if kind == "hand_build":
+        if session_layout(dataset) != "pose":
+            raise ApiError("no_pose_data", "run Face Build and Pose Build for this session first", 422)
+        hands = _hand_stream_state(dataset)
+        if hands and not regenerate:
+            raise ApiError("hand_exists", "hand outputs already exist; set regenerate to replace them", 409)
+        try:
+            verify_model(get_spec("hand"))
+        except Exception as exc:  # missing or changed model file: refuse, never load it
+            raise ApiError("model_integrity", f"the hand model failed its check: {exc}", 503) from None
+    elif kind == "pose_build":
         if not (dataset / "facial_data.json").is_file():
             raise ApiError("no_face_data", "run the face extraction for this session first", 422)
         if session_layout(dataset) == "pose" and not regenerate:

@@ -27,3 +27,6 @@ api.log
 
 # Local API token (created on first start; never commit)
 config/api_token.txt
+
+# Manual gesture annotations: personal labels for evaluation. Never commit them.
+annotations/
