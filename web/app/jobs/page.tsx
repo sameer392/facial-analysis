@@ -111,8 +111,15 @@ export default function JobsPage() {
     create.mutate();
   };
 
-  const canStart = tokenLoaded && token !== "" && person !== "" && session !== "" && !create.isPending
-    && (!isRegeneration || regenerate);
+  // The first missing requirement, shown next to the button so a disabled button explains itself.
+  const blocker =
+    !tokenLoaded ? null
+    : token === "" ? "Enter the API token above to start a build."
+    : person === "" ? "Choose a person."
+    : session === "" ? "Choose a session."
+    : isRegeneration && !regenerate ? "This session already has data for this job. Tick “Replace” to start it again."
+    : null;
+  const canStart = blocker === null && !create.isPending;
 
   return (
     <div className="flex flex-col gap-6">
@@ -199,6 +206,7 @@ export default function JobsPage() {
           </div>
         </form>
         <p className="mt-3 text-xs text-[var(--muted)]">{KIND_HELP[kind]}</p>
+        {blocker ? <p className="mt-2 text-sm font-medium" role="status">{blocker}</p> : null}
         {create.isError ? (
           <div className="mt-4">
             <ErrorState {...errorText(create.error)} />
