@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { EChartsOption } from "echarts";
 import { api } from "../../../lib/api";
 import { Card, Empty, ErrorState, Loading } from "../../../components/ui";
@@ -25,6 +25,7 @@ export default function ComparePage({ params }: { params: Promise<{ person: stri
   const chosen = picked ?? faceSessions;
   const comparison = useQuery({
     queryKey: ["comparison", person, chosen.join(",")],
+    placeholderData: keepPreviousData,
     queryFn: () => api.comparison(person, chosen),
     enabled: chosen.length > 0,
   });

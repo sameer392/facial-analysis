@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { EChartsOption } from "echarts";
 import { api } from "../../../../../lib/api";
 import { Card, ErrorState, Loading } from "../../../../../components/ui";
@@ -18,11 +18,13 @@ export default function DiagnosticsPage({ params }: { params: Promise<{ person: 
   });
   const raw = useQuery({
     queryKey: ["face-landmarks", person, session, frame, "raw"],
+    placeholderData: keepPreviousData,
     queryFn: () => api.faceLandmarks(person, session, frame, false),
     enabled: summary.isSuccess,
   });
   const compensated = useQuery({
     queryKey: ["face-landmarks", person, session, frame, "comp"],
+    placeholderData: keepPreviousData,
     queryFn: () => api.faceLandmarks(person, session, frame, true),
     enabled: summary.isSuccess,
   });

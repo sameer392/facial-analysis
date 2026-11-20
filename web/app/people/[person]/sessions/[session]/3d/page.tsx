@@ -2,7 +2,7 @@
 
 import { use, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { EChartsOption } from "echarts";
 import { api } from "../../../../../lib/api";
 import { Card, ErrorState, Loading } from "../../../../../components/ui";
@@ -34,6 +34,7 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
   const pose = useQuery({ queryKey: ["headpose", person, session], queryFn: () => api.headPose(person, session) });
   const landmarks = useQuery({
     queryKey: ["face-landmarks", person, session, frame, view],
+    placeholderData: keepPreviousData,
     queryFn: () => api.faceLandmarks(person, session, frame, view === "compensated"),
     enabled: pose.isSuccess,
   });
