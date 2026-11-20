@@ -33,8 +33,8 @@ export default function ThreeDPage({ params }: { params: Promise<{ person: strin
 
   const pose = useQuery({ queryKey: ["headpose", person, session], queryFn: () => api.headPose(person, session) });
   const landmarks = useQuery({
-    queryKey: ["v1lm", person, session, frame, view],
-    queryFn: () => api.v1Landmarks(person, session, frame, view === "compensated"),
+    queryKey: ["face-landmarks", person, session, frame, view],
+    queryFn: () => api.faceLandmarks(person, session, frame, view === "compensated"),
     enabled: pose.isSuccess,
   });
 

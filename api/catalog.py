@@ -29,6 +29,9 @@ class ApiError(Exception):
         self.status = status
 
 
+# Feature names shown to users. The layout codes above are kept for compatibility.
+LAYOUT_NAMES = {"v1": "face data", "v2": "pose data", "incomplete_v2": "pose data incomplete", "none": "no data"}
+
 def _check_person(person: str) -> None:
     if not pp.is_valid_person(person):
         raise ApiError("invalid_name", "invalid person or project name", 400)
@@ -57,6 +60,7 @@ def list_sessions(person: str) -> list[dict]:
         rows.append({
             "session_id": session_id,
             "has_video": pp.session_video(person, session_id).is_file(),
-            "layout": s2.session_layout(pp.session_dataset_dir(person, session_id)),
+            "layout": (layout := s2.session_layout(pp.session_dataset_dir(person, session_id))),
+            "layout_name": LAYOUT_NAMES.get(layout, layout),
         })
     return rows

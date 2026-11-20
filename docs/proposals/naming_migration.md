@@ -1,6 +1,6 @@
 # Proposal: remove version names from the product (naming migration)
 
-Status: **proposed, not started.** Nothing in this document has been applied. Each step needs approval before it runs.
+Status: Step 0 (backup) and Step 1 (new names, old names accepted) are done. Step 2 (feature paths and job codes, old ones kept) is done. Steps 3 to 5 are not started.
 
 ## 1. Goal
 

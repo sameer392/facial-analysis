@@ -5,12 +5,13 @@ down the API. Job records are kept in a small SQLite database under logs/. The d
 by those scripts, never by this module.
 
 Kinds:
-  v2_build    src/extraction/build_v2_session.py   (V2 Pose build; --regenerate-v2 replaces V2 data)
-  v1_extract  src/analysis/extract_faces.py         (V1 face extraction; refuses existing data, no regenerate)
-  v1_analyse  src/analysis/analyze_faces.py         (V1 blendshape and motion outputs; --force regenerates)
+  pose_build     src/extraction/build_v2_session.py  (pose data; --regenerate-v2 replaces it)
+  face_extract   src/analysis/extract_faces.py        (face data; refuses existing data, no regenerate)
+  face_analyse   src/analysis/analyze_faces.py        (blendshape and motion outputs; --force regenerates)
+Older codes (v2_build, v1_extract, v1_analyse) are still accepted and mapped to these.
 
 Lifecycle: queued -> running -> succeeded | failed | cancelled, and interrupted when the API restarts while a
-job is active. Progress is per frame for v1_extract (from the script's "Processed" lines) and per stage for the
+job is active. Progress is per frame for face_extract (from the script's "Processed" lines) and per stage for the
 other kinds.
 
 Concurrency: one active job per session across all kinds, enforced by a unique index. A session with the
@@ -44,11 +45,13 @@ from api.catalog import ApiError, _check_person  # noqa: E402
 from facial_analyzer import make_session, motion_output_paths  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
 
-KINDS = ("v2_build", "v1_extract", "v1_analyse")
+KINDS = ("pose_build", "face_extract", "face_analyse")
+# Older job codes, still accepted in requests and mapped when rows are read.
+KIND_ALIASES = {"v2_build": "pose_build", "v1_extract": "face_extract", "v1_analyse": "face_analyse"}
 SCRIPTS = {
-    "v2_build": ROOT / "src" / "extraction" / "build_v2_session.py",
-    "v1_extract": ROOT / "src" / "analysis" / "extract_faces.py",
-    "v1_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
+    "pose_build": ROOT / "src" / "extraction" / "build_v2_session.py",
+    "face_extract": ROOT / "src" / "analysis" / "extract_faces.py",
+    "face_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
 }
 ACTIVE = ("queued", "running")
 LEFTOVER_PREFIXES = STAGING_PREFIXES + PREVIOUS_PREFIXES
@@ -149,8 +152,14 @@ class JobStore:
                          (*fields.values(), _now(), job_id))
 
 
+def canonical_kind(kind: str) -> str:
+    """The current name for a job kind. Older names map to the current ones."""
+    return KIND_ALIASES.get(kind, kind)
+
+
 def _row(row) -> dict:
     d = dict(row)
+    d["kind"] = canonical_kind(d["kind"])
     d["regenerate"] = bool(d["regenerate"])
     d["cancel_requested"] = bool(d["cancel_requested"])
     return d
@@ -161,12 +170,13 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
 
     state holds what earlier lines taught us (the total frame count for extraction).
     """
-    if kind == "v2_build":
+    kind = canonical_kind(kind)
+    if kind == "pose_build":
         for marker, stage in V2_MARKERS:
             if marker in line:
                 return stage, (V2_STAGES.index(stage) + 1) / len(V2_STAGES)
         return None
-    if kind == "v1_extract":
+    if kind == "face_extract":
         m = _TOTAL_RE.match(line)
         if m:
             state["total"] = int(m.group(1))
@@ -179,7 +189,7 @@ def parse_progress(kind: str, line: str, state: dict) -> tuple[str, float] | Non
         if line.startswith("Processing completed"):
             return "publish", 0.99
         return None
-    if kind == "v1_analyse":
+    if kind == "face_analyse":
         for marker, stage, fraction in V1_ANALYSE_MARKERS:
             if marker in line:
                 return stage, fraction
@@ -197,18 +207,19 @@ def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
         if p.name in LOCK_FILES or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
     frames = dataset_dir / "frames"
-    if kind == "v1_extract" and not (dataset_dir / "facial_data.json").exists() \
+    if canonical_kind(kind or "") == "face_extract" and not (dataset_dir / "facial_data.json").exists() \
             and frames.is_dir() and any(frames.iterdir()):
         names.append("frames/ (partly written)")
     return names
 
 
 def default_command(job: dict) -> list[str]:
-    cmd = [sys.executable, str(SCRIPTS[job["kind"]]), job["person"], job["session"]]
+    kind = canonical_kind(job["kind"])
+    cmd = [sys.executable, str(SCRIPTS[kind]), job["person"], job["session"]]
     if job["regenerate"]:
-        if job["kind"] == "v2_build":
+        if kind == "pose_build":
             cmd.append("--regenerate-v2")
-        elif job["kind"] == "v1_analyse":
+        elif kind == "face_analyse":
             cmd.append("--force")
     return cmd
 
@@ -321,6 +332,7 @@ def token_ok(presented: str | None) -> bool:
 
 def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     """The same refusals as the scripts, checked before anything is queued."""
+    kind = canonical_kind(kind)
     if kind not in KINDS:
         raise ApiError("invalid_request", f"unknown job kind: {kind!r}", 400)
     _check_person(person)
@@ -333,22 +345,22 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     if any((dataset / name).exists() for name in LOCK_FILES):
         raise ApiError("writer_lock_present", "the writer lock is present; another run may be active or interrupted", 409)
 
-    if kind == "v2_build":
+    if kind == "pose_build":
         if not (dataset / "facial_data.json").is_file():
-            raise ApiError("no_v1_data", "run the face extraction for this session first", 422)
+            raise ApiError("no_face_data", "run the face extraction for this session first", 422)
         if session_layout(dataset) == "v2" and not regenerate:
             raise ApiError("v2_exists", "pose data already exists; set regenerate to replace it", 409)
-    elif kind == "v1_extract":
+    elif kind == "face_extract":
         frames = dataset / "frames"
         if (dataset / "facial_data.json").exists() or (frames.is_dir() and any(frames.iterdir())):
-            raise ApiError("v1_exists", "face data already exists; extraction never overwrites it", 409)
+            raise ApiError("face_data_exists", "face data already exists; extraction never overwrites it", 409)
         try:
             verify_model(get_spec("face"))
         except Exception as exc:  # missing or changed model file: refuse, never load it
             raise ApiError("model_integrity", f"the face model failed its check: {exc}", 503) from None
-    elif kind == "v1_analyse":
+    elif kind == "face_analyse":
         if not (dataset / "facial_data.json").is_file():
-            raise ApiError("no_v1_data", "run the face extraction for this session first", 422)
+            raise ApiError("no_face_data", "run the face extraction for this session first", 422)
         outputs = [dataset / "facial_blendshapes.csv", *motion_output_paths(make_session(person, session))]
         existing = [p.name for p in outputs if p.exists()]
         if existing and not regenerate:
@@ -356,6 +368,7 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
 
 
 def create_job(person: str, session: str, kind: str, regenerate: bool) -> dict:
+    kind = canonical_kind(kind)
     check_job(kind, person, session, regenerate)
     svc = service()
     try:

@@ -186,3 +186,20 @@ def settings():
 @app.get("/api/layers")
 def layers():
     return system.layers()
+
+
+# ---- naming migration, step 2: feature paths (same handlers; the older paths stay for one phase) ----
+_FEATURE_ROUTES = [
+    ("/api/persons/{person}/sessions/{session}/face/summary", v1_summary),
+    ("/api/persons/{person}/sessions/{session}/face/series", v1_series),
+    ("/api/persons/{person}/sessions/{session}/face/blinks", v1_blinks),
+    ("/api/persons/{person}/sessions/{session}/face/landmarks/{index}", v1_landmarks),
+    ("/api/persons/{person}/sessions/{session}/face/head-pose", v1_head_pose),
+    ("/api/persons/{person}/sessions/{session}/pose", v2_info),
+    ("/api/persons/{person}/sessions/{session}/pose/timeline", v2_timeline),
+    ("/api/persons/{person}/sessions/{session}/pose/frames", v2_pose),
+    ("/api/persons/{person}/sessions/{session}/pose/frames/{index}/quality", v2_quality),
+    ("/api/persons/{person}/sessions/{session}/pose/frames/{index}/overlay.jpg", v2_overlay),
+]
+for _path, _handler in _FEATURE_ROUTES:
+    app.add_api_route(_path, _handler, methods=["GET"])

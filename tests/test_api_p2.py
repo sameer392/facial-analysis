@@ -65,7 +65,7 @@ class SummaryParityTests(P2TestCase):
         with self.assertRaises(ApiError) as ctx:
             v1_data.summary("demo_person", "session-009")
         self.assertEqual(ctx.exception.status, 404)
-        self.assertEqual(ctx.exception.code, "no_v1_data")
+        self.assertEqual(ctx.exception.code, "no_face_data")
 
 
 class SeriesParityTests(P2TestCase):

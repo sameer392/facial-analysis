@@ -12,6 +12,7 @@ export type SessionRow = {
   session_id: string;
   has_video: boolean;
   layout: "v1" | "v2" | "incomplete_v2" | "none";
+  layout_name: string;
 };
 
 export type Quality = {
@@ -31,7 +32,7 @@ export type Quality = {
   scope: string;
 };
 
-export type V1Summary = {
+export type FaceSummary = {
   session_id: string;
   frames: number;
   neutral_frames: number;
@@ -71,7 +72,7 @@ export type HeadPose = {
   depth_range: (number | null)[];
 };
 
-export type V2Info = {
+export type PoseInfo = {
   session_id: string;
   valid: boolean;
   frames: number;
@@ -148,7 +149,7 @@ function get<T>(path: string): Promise<T> {
   return request<T>("GET", path);
 }
 
-export type JobKind = "v2_build" | "v1_extract" | "v1_analyse";
+export type JobKind = "pose_build" | "face_extract" | "face_analyse";
 
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
 
@@ -225,27 +226,27 @@ export const api = {
   health: () => get<Health>("/health"),
   persons: () => get<string[]>("/persons"),
   sessions: (person: string) => get<SessionRow[]>(`/persons/${enc(person)}/sessions`),
-  v1Summary: (person: string, session: string) =>
-    get<V1Summary>(`/persons/${enc(person)}/sessions/${enc(session)}/v1/summary`),
-  v1Series: (person: string, session: string, fields: string[]) =>
-    get<Series>(`/persons/${enc(person)}/sessions/${enc(session)}/v1/series?fields=${enc(fields.join(","))}`),
-  v1Blinks: (person: string, session: string) =>
-    get<Blink[]>(`/persons/${enc(person)}/sessions/${enc(session)}/v1/blinks`),
-  v1Landmarks: (person: string, session: string, index: number, compensated: boolean) =>
+  faceSummary: (person: string, session: string) =>
+    get<FaceSummary>(`/persons/${enc(person)}/sessions/${enc(session)}/face/summary`),
+  faceSeries: (person: string, session: string, fields: string[]) =>
+    get<Series>(`/persons/${enc(person)}/sessions/${enc(session)}/face/series?fields=${enc(fields.join(","))}`),
+  faceBlinks: (person: string, session: string) =>
+    get<Blink[]>(`/persons/${enc(person)}/sessions/${enc(session)}/face/blinks`),
+  faceLandmarks: (person: string, session: string, index: number, compensated: boolean) =>
     get<LandmarkFrame>(
-      `/persons/${enc(person)}/sessions/${enc(session)}/v1/landmarks/${index}?compensated=${compensated}`,
+      `/persons/${enc(person)}/sessions/${enc(session)}/face/landmarks/${index}?compensated=${compensated}`,
     ),
   comparison: (person: string, sessions: string[]) =>
     get<Comparison>(`/persons/${enc(person)}/comparison?sessions=${enc(sessions.join(","))}`),
   headPose: (person: string, session: string) =>
-    get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/v1/head-pose`),
-  v2Info: (person: string, session: string) =>
-    get<V2Info>(`/persons/${enc(person)}/sessions/${enc(session)}/v2`),
-  v2Timeline: (person: string, session: string) =>
-    get<TimelineRow[]>(`/persons/${enc(person)}/sessions/${enc(session)}/v2/timeline`),
-  v2Quality: (person: string, session: string, index: number, threshold: number) =>
+    get<HeadPose>(`/persons/${enc(person)}/sessions/${enc(session)}/face/head-pose`),
+  poseInfo: (person: string, session: string) =>
+    get<PoseInfo>(`/persons/${enc(person)}/sessions/${enc(session)}/pose`),
+  poseTimeline: (person: string, session: string) =>
+    get<TimelineRow[]>(`/persons/${enc(person)}/sessions/${enc(session)}/pose/timeline`),
+  poseQuality: (person: string, session: string, index: number, threshold: number) =>
     get<{ frame: number; quality: PoseQuality; joints: JointRow[] }>(
-      `/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/quality?threshold=${threshold}`,
+      `/persons/${enc(person)}/sessions/${enc(session)}/pose/frames/${index}/quality?threshold=${threshold}`,
     ),
   models: () => get<ModelStatus[]>("/models"),
   jobLogs: (limit = 50) => get<JobLogRow[]>(`/logs/jobs?limit=${limit}`),
@@ -257,6 +258,6 @@ export const api = {
   createJob: (token: string, body: { kind: JobKind; person: string; session: string; regenerate: boolean }) =>
     request<Job>("POST", "/jobs", { body, token }),
   cancelJob: (token: string, id: string) => request<Job>("POST", `/jobs/${enc(id)}/cancel`, { token }),
-  v2OverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
-    `/api/persons/${enc(person)}/sessions/${enc(session)}/v2/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
+  poseOverlayUrl: (person: string, session: string, index: number, threshold: number, points: boolean, skeleton: boolean) =>
+    `/api/persons/${enc(person)}/sessions/${enc(session)}/pose/frames/${index}/overlay.jpg?threshold=${threshold}&points=${points}&skeleton=${skeleton}`,
 };

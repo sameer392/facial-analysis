@@ -29,9 +29,9 @@ function lineOption(time: (number | null)[], series: [string, (number | boolean 
 
 export default function FacialPage({ params }: { params: Promise<{ person: string; session: string }> }) {
   const { person, session } = use(params);
-  const summary = useQuery({ queryKey: ["v1summary", person, session], queryFn: () => api.v1Summary(person, session) });
-  const series = useQuery({ queryKey: ["v1series", person, session], queryFn: () => api.v1Series(person, session, FIELDS) });
-  const blinks = useQuery({ queryKey: ["v1blinks", person, session], queryFn: () => api.v1Blinks(person, session) });
+  const summary = useQuery({ queryKey: ["face-summary", person, session], queryFn: () => api.faceSummary(person, session) });
+  const series = useQuery({ queryKey: ["face-series", person, session], queryFn: () => api.faceSeries(person, session, FIELDS) });
+  const blinks = useQuery({ queryKey: ["face-blinks", person, session], queryFn: () => api.faceBlinks(person, session) });
 
   const motionOption = useMemo(() => {
     if (!series.data) return null;

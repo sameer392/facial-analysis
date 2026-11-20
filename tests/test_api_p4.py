@@ -137,7 +137,7 @@ class RefusalTests(P4TestCase):
     def test_missing_version_one_data_is_refused(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-001" / "facial_data.json").unlink()
         status, body = self.post_job("session-001")
-        self.assertEqual((status, body["code"]), (422, "no_v1_data"))
+        self.assertEqual((status, body["code"]), (422, "no_face_data"))
 
     def test_bad_names_and_kinds_are_refused(self):
         from api.main import app
@@ -266,7 +266,7 @@ class RestartTests(P4TestCase):
 class V1KindTests(P4TestCase):
     def test_extraction_refuses_existing_version_one_data(self):
         status, body = self.post_job("session-001", kind="v1_extract")
-        self.assertEqual((status, body["code"]), (409, "v1_exists"))
+        self.assertEqual((status, body["code"]), (409, "face_data_exists"))
 
     def test_extraction_refuses_when_the_face_model_fails_its_check(self):
         (pp.DATASETS_ROOT / "demo_person" / "session-003" / "facial_data.json").unlink()
@@ -279,7 +279,7 @@ class V1KindTests(P4TestCase):
         status, job = self.post_job("session-001", kind="v1_analyse")
         self.assertEqual(status, 202)
         done = self.wait_for(job["id"], ("succeeded", "failed"))
-        self.assertEqual(done["kind"], "v1_analyse")
+        self.assertEqual(done["kind"], "face_analyse")
         self.assertEqual(done["state"], "succeeded")
 
     def test_analysis_refuses_existing_outputs_unless_regenerate(self):

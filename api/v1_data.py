@@ -56,7 +56,7 @@ def _check_session(person: str, session: str) -> Path:
         raise ApiError("invalid_name", "invalid session name", 400)
     facial = pp.session_dataset_dir(person, session) / "facial_data.json"
     if not facial.is_file():
-        raise ApiError("no_v1_data", "no face data for this session", 404)
+        raise ApiError("no_face_data", "no face data for this session", 404)
     return facial
 
 

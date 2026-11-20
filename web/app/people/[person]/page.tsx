@@ -6,13 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { Badge, Card, Empty, ErrorState, Loading } from "../../components/ui";
 
-const LAYOUT_LABEL: Record<string, string> = {
-  v1: "Face data",
-  v2: "Pose data",
-  incomplete_v2: "Pose data incomplete",
-  none: "No dataset yet",
-};
-
 export default function PersonPage({ params }: { params: Promise<{ person: string }> }) {
   const { person } = use(params);
   const sessions = useQuery({ queryKey: ["sessions", person], queryFn: () => api.sessions(person) });
@@ -66,7 +59,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
                   </td>
                   <td className="py-2">
                     <Badge tone={row.layout === "v2" ? "good" : row.layout === "incomplete_v2" ? "warn" : "neutral"}>
-                      {LAYOUT_LABEL[row.layout] ?? row.layout}
+                      {row.layout_name}
                     </Badge>
                   </td>
                 </tr>

@@ -11,19 +11,19 @@ import { Chart } from "../../../../../components/chart";
 export default function DiagnosticsPage({ params }: { params: Promise<{ person: string; session: string }> }) {
   const { person, session } = use(params);
   const [frame, setFrame] = useState(0);
-  const summary = useQuery({ queryKey: ["v1summary", person, session], queryFn: () => api.v1Summary(person, session) });
+  const summary = useQuery({ queryKey: ["face-summary", person, session], queryFn: () => api.faceSummary(person, session) });
   const series = useQuery({
-    queryKey: ["v1series", person, session, "diag"],
-    queryFn: () => api.v1Series(person, session, ["face_detected", "is_neutral", "neutral_offset"]),
+    queryKey: ["face-series", person, session, "diag"],
+    queryFn: () => api.faceSeries(person, session, ["face_detected", "is_neutral", "neutral_offset"]),
   });
   const raw = useQuery({
-    queryKey: ["v1lm", person, session, frame, "raw"],
-    queryFn: () => api.v1Landmarks(person, session, frame, false),
+    queryKey: ["face-landmarks", person, session, frame, "raw"],
+    queryFn: () => api.faceLandmarks(person, session, frame, false),
     enabled: summary.isSuccess,
   });
   const compensated = useQuery({
-    queryKey: ["v1lm", person, session, frame, "comp"],
-    queryFn: () => api.v1Landmarks(person, session, frame, true),
+    queryKey: ["face-landmarks", person, session, frame, "comp"],
+    queryFn: () => api.faceLandmarks(person, session, frame, true),
     enabled: summary.isSuccess,
   });
 

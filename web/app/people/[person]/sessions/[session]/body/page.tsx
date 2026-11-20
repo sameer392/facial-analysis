@@ -15,15 +15,15 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
   const [points, setPoints] = useState(true);
   const [skeleton, setSkeleton] = useState(true);
 
-  const info = useQuery({ queryKey: ["v2info", person, session], queryFn: () => api.v2Info(person, session) });
+  const info = useQuery({ queryKey: ["pose-info", person, session], queryFn: () => api.poseInfo(person, session) });
   const timeline = useQuery({
-    queryKey: ["v2timeline", person, session],
-    queryFn: () => api.v2Timeline(person, session),
+    queryKey: ["pose-timeline", person, session],
+    queryFn: () => api.poseTimeline(person, session),
     enabled: info.isSuccess,
   });
   const quality = useQuery({
-    queryKey: ["v2quality", person, session, frame, threshold],
-    queryFn: () => api.v2Quality(person, session, frame, threshold),
+    queryKey: ["pose-quality", person, session, frame, threshold],
+    queryFn: () => api.poseQuality(person, session, frame, threshold),
     enabled: info.isSuccess,
   });
 
@@ -98,7 +98,7 @@ export default function BodyMotionPage({ params }: { params: Promise<{ person: s
                 </div>
                 {/* Served by the API from the stored recording; the image is not generated in the browser. */}
                 <img
-                  src={api.v2OverlayUrl(person, session, frame, threshold, points, skeleton)}
+                  src={api.poseOverlayUrl(person, session, frame, threshold, points, skeleton)}
                   alt={`Pose overlay for frame ${frame}`}
                   className="w-full rounded border border-[var(--border)]"
                 />

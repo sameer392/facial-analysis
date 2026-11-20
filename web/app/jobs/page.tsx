@@ -8,15 +8,15 @@ import { Badge, Card, Empty, ErrorState, Loading } from "../components/ui";
 const TOKEN_KEY = "facial.apiToken";
 
 const KIND_LABEL: Record<JobKind, string> = {
-  v1_extract: "Face extraction",
-  v1_analyse: "Face analysis outputs",
-  v2_build: "Pose build",
+  face_extract: "Face extraction",
+  face_analyse: "Face analysis outputs",
+  pose_build: "Pose build",
 };
 
 const KIND_HELP: Record<JobKind, string> = {
-  v1_extract: "Reads the recording and writes the face data and frames. Never overwrites existing data. Progress is per frame.",
-  v1_analyse: "Writes the blendshape table and motion outputs from existing face data. Replacing needs the box ticked.",
-  v2_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
+  face_extract: "Reads the recording and writes the face data and frames. Never overwrites existing data. Progress is per frame.",
+  face_analyse: "Writes the blendshape table and motion outputs from existing face data. Replacing needs the box ticked.",
+  pose_build: "Writes the pose data from the recording. Needs face data first. Replacing needs the box ticked.",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -66,7 +66,7 @@ function errorText(error: unknown): { message: string; code?: string } {
 export default function JobsPage() {
   const queryClient = useQueryClient();
   const [token, saveToken, tokenLoaded] = useApiToken();
-  const [kind, setKind] = useState<JobKind>("v1_extract");
+  const [kind, setKind] = useState<JobKind>("face_extract");
   const [person, setPerson] = useState("");
   const [session, setSession] = useState("");
   const [regenerate, setRegenerate] = useState(false);
@@ -85,12 +85,12 @@ export default function JobsPage() {
 
   // Which sessions each kind can start on, following the script rules. The server checks again.
   const eligible = (layout: string) => {
-    if (kind === "v1_extract") return layout === "none";
+    if (kind === "face_extract") return layout === "none";
     return layout === "v1" || layout === "v2";
   };
   const startable = (sessions.data ?? []).filter((s) => s.has_video && eligible(s.layout));
   const selected = startable.find((s) => s.session_id === session);
-  const isRegeneration = (kind === "v2_build" && selected?.layout === "v2") || kind === "v1_analyse";
+  const isRegeneration = (kind === "pose_build" && selected?.layout === "v2") || kind === "face_analyse";
 
   const create = useMutation({
     mutationFn: () => api.createJob(token, { kind, person, session, regenerate }),
@@ -193,7 +193,7 @@ export default function JobsPage() {
             {isRegeneration ? (
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={regenerate} onChange={(e) => setRegenerate(e.target.checked)} />
-                {kind === "v2_build" ? "Replace the existing pose data" : "Replace the existing analysis outputs"}
+                {kind === "pose_build" ? "Replace the existing pose data" : "Replace the existing analysis outputs"}
               </label>
             ) : null}
             <button
