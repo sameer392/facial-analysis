@@ -467,6 +467,12 @@ def cancel_job(job_id: str) -> dict:
     return svc.store.get(job_id)
 
 
+def startup_status() -> str:
+    """The one line printed when the API starts. It names the token's location in words only: the file path is
+    not printed, because an absolute filesystem path does not belong in a log."""
+    return "API token: stored locally on this machine. Enter it once on the Settings page."
+
+
 def recover_interrupted() -> list[dict]:
     """On API start, jobs still marked active have no worker in this process. Mark them interrupted and report
     what was left behind. Nothing is removed, and no process is killed."""

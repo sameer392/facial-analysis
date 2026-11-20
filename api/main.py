@@ -23,7 +23,7 @@ async def lifespan(_app):
     interrupted = jobs.recover_interrupted()
     if interrupted:
         print(f"Marked {len(interrupted)} unfinished job(s) as interrupted.")
-    print(f"API token file: {jobs.TOKEN_FILE} (enter this token once, on the Settings page)")
+    print(jobs.startup_status())
     yield
 
 

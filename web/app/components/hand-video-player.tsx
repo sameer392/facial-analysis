@@ -162,7 +162,8 @@ export function HandVideoPlayer({
     const frame = frameForTime(ts, mediaTime);
     const start = windowStartFor(frame);
     cache.ensure(start);
-    cache.ensure(start + WINDOW_SIZE);
+    // Prefetch the next window only if it exists; a window past the last frame is refused by the API.
+    if (start + WINDOW_SIZE < ts.length) cache.ensure(start + WINDOW_SIZE);
     if (start >= WINDOW_SIZE) cache.ensure(start - WINDOW_SIZE);
     const entry = cache.get(start);
     if (entry?.state === "ready" && frame < entry.window.start + entry.window.count) {

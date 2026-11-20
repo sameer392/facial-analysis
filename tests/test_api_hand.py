@@ -1,5 +1,6 @@
 """Hand motion API and job tests (phase H5). Synthetic data and a fake worker only; no model is needed for jobs."""
 
+import io
 import json
 import shutil
 import sys
@@ -340,6 +341,24 @@ class HandReadTests(tcl.GestureCase):
             self.get(path, query)
         after = {p.name: p.read_bytes() for p in (self.dataset / "hands").iterdir() if p.is_file()}
         self.assertEqual(before, after)
+
+
+class StartupLogTests(JobCase):
+    def test_startup_message_does_not_print_the_token_path(self):
+        import asyncio
+        import contextlib
+        from api import main as api_main
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            async def run():
+                async with api_main.lifespan(api_main.app):
+                    pass
+            asyncio.run(run())
+        text = out.getvalue()
+        self.assertNotIn(str(jobs.TOKEN_FILE), text)
+        self.assertNotIn(str(ROOT), text)
+        self.assertIn("Settings page", text)
+        self.assertNotIn(TOKEN, text)
 
 
 class LayerTests(unittest.TestCase):
