@@ -327,13 +327,46 @@ class RegenerationAndRollbackTests(SessionTestCase):
             w.rollback_v2(self.session)
 
 
+class LegacyNameTests(SessionTestCase):
+    """Older builds used .v2-lock and .v2-staging-*. They must still block writes and be recovered."""
+
+    def test_legacy_lock_refuses_a_write(self):
+        (self.session / w.LEGACY_LOCK_FILE).write_text("777", encoding="utf-8")
+        with self.assertRaises(w.V2Error):
+            w.write_v2_session(self.session, make_payload())
+        self.assertTrue((self.session / w.LEGACY_LOCK_FILE).is_file())
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-")], [])
+
+    def test_legacy_staging_folder_is_removed_by_recovery(self):
+        legacy = self.session / (w.LEGACY_STAGING_PREFIX + "old")
+        legacy.mkdir(parents=True)
+        (legacy / "leftover.bin").write_bytes(b"x")
+        actions = w.recover_incomplete_v2(self.session)
+        self.assertFalse(legacy.exists())
+        self.assertTrue(any(".v2-staging-old" in a for a in actions))
+
+    def test_legacy_lock_is_cleared_by_recovery(self):
+        (self.session / w.LEGACY_LOCK_FILE).write_text("777", encoding="utf-8")
+        actions = w.recover_incomplete_v2(self.session)
+        self.assertFalse((self.session / w.LEGACY_LOCK_FILE).exists())
+        self.assertTrue(any(".v2-lock" in a for a in actions))
+
+    def test_new_lock_has_the_new_name_and_is_released(self):
+        lock = w._acquire_lock(self.session)
+        self.assertEqual(lock.name, ".pose-lock")
+        with self.assertRaises(w.V2Error):
+            w._acquire_lock(self.session)
+        w._release_lock(self.session)
+        self.assertFalse((self.session / ".pose-lock").exists())
+
+
 class LockTests(SessionTestCase):
     def test_second_writer_is_refused_while_lock_is_held(self):
         (self.session / w.LOCK_FILE).write_text("12345", encoding="utf-8")
         with self.assertRaises(w.V2Error):
             w.write_v2_session(self.session, make_payload())
         self.assertTrue((self.session / w.LOCK_FILE).is_file())
-        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
 
     def test_lock_is_released_after_success(self):
         w.write_v2_session(self.session, make_payload())
@@ -456,14 +489,14 @@ class StagingCleanupTests(SessionTestCase):
         with mock.patch.object(w, "_build_manifest", side_effect=RuntimeError("disk problem")):
             with self.assertRaises(RuntimeError):
                 w.write_v2_session(self.session, make_payload())
-        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
         self.assertFalse((self.session / "metadata.json").exists())
         self.assert_v1_unchanged()
 
     def test_simulated_crash_keeps_the_staging_folder_for_recovery(self):
         with self.assertRaises(w.SimulatedInterruption):
             w.write_v2_session(self.session, make_payload(), fail_at="validate")
-        self.assertEqual(len([p for p in self.session.iterdir() if p.name.startswith(".v2-staging")]), 1)
+        self.assertEqual(len([p for p in self.session.iterdir() if p.name.startswith(".pose-staging")]), 1)
 
 
 class DestinationCollisionTests(SessionTestCase):
@@ -480,7 +513,7 @@ class DestinationCollisionTests(SessionTestCase):
         (self.session / "facial" / "landmarks.npy").write_bytes(b"stray")
         with self.assertRaises(w.V2Error):
             w.write_v2_session(self.session, make_payload())
-        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".v2-staging")], [])
+        self.assertEqual([p.name for p in self.session.iterdir() if p.name.startswith(".pose-staging")], [])
 
 
 class IncompleteDetectionTests(SessionTestCase):

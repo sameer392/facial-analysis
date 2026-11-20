@@ -2,7 +2,7 @@
 
 Publication order inside a session folder (datasets/<person>/<session>/):
 
-    1. stage       every v2 file is written to .v2-staging-<id>/ first
+    1. stage       every pose data file is written to .pose-staging-<id>/ first
     2. validate    staged files are read back and checked against schema_v2.py
     3. checksum    SHA-256 and size of every staged file are recorded in manifest.json
     4. verify      manifest.json is checked against the staged files
@@ -47,9 +47,17 @@ from schema_v2 import (
     validate_timeline_rows,
 )
 
-STAGING_PREFIX = ".v2-staging-"
-LOCK_FILE = ".v2-lock"
-PREVIOUS_PREFIX = ".v2-previous-"
+# Names written today. Older builds used the ".v2-" names below; they are still recognised, so an
+# existing lock or staging folder is handled (refused, reported or recovered), but nothing new is written with them.
+STAGING_PREFIX = ".pose-staging-"
+LOCK_FILE = ".pose-lock"
+PREVIOUS_PREFIX = ".pose-previous-"
+LEGACY_STAGING_PREFIX = ".v2-staging-"
+LEGACY_LOCK_FILE = ".v2-lock"
+LEGACY_PREVIOUS_PREFIX = ".v2-previous-"
+STAGING_PREFIXES = (STAGING_PREFIX, LEGACY_STAGING_PREFIX)
+PREVIOUS_PREFIXES = (PREVIOUS_PREFIX, LEGACY_PREVIOUS_PREFIX)
+LOCK_FILES = (LOCK_FILE, LEGACY_LOCK_FILE)
 MANIFEST_VERSION = 1
 
 TIMELINE_COLUMNS = ("frame", "timestamp_ms", "face_detected", "pose_detected",
@@ -65,16 +73,22 @@ V2_DIRECTORIES = ("facial", "body", "hands", "quality")
 V2_ROOT_FILES = (TIMELINE_FILE, MANIFEST_FILE, METADATA_FILE)
 
 
-class V2Error(Exception):
-    """Base error for version 2 writing."""
+class PoseDataError(Exception):
+    """Base error for pose data writing."""
 
 
-class V2ExistsError(V2Error):
-    """A complete version 2 dataset exists and regeneration was not requested."""
+class PoseDataExistsError(PoseDataError):
+    """A complete pose dataset exists and regeneration was not requested."""
 
 
-class V2ValidationError(V2Error):
+class PoseDataValidationError(PoseDataError):
     """Payload or staged output does not satisfy schema_v2.py."""
+
+
+# Old names, kept so existing imports and except clauses keep working.
+V2Error = PoseDataError
+V2ExistsError = PoseDataExistsError
+V2ValidationError = PoseDataValidationError
 
 
 class SimulatedInterruption(Exception):
@@ -85,7 +99,7 @@ FAIL_POINTS = ("arrays", "csv", "validate", "manifest", "publish", "metadata")
 
 
 @dataclass
-class V2Payload:
+class PoseDataPayload:
     """Everything needed to write one version 2 session.
 
     arrays:          relative path -> numpy array (required and optional schema arrays)
@@ -102,6 +116,9 @@ class V2Payload:
     quality: dict
     metadata: dict
     extra: dict = field(default_factory=dict)
+
+
+V2Payload = PoseDataPayload  # old name, kept for existing imports
 
 
 # ---------------------------------------------------------------- helpers
@@ -167,13 +184,13 @@ def _write_text_atomic(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def _expected_arrays(payload: V2Payload) -> list[str]:
+def _expected_arrays(payload: PoseDataPayload) -> list[str]:
     names = [spec.relative_path for spec in ARRAY_SPECS]
     names += [spec.relative_path for spec in OPTIONAL_ARRAY_SPECS if spec.relative_path in payload.arrays]
     return names
 
 
-def _planned_paths(payload: V2Payload) -> list[str]:
+def _planned_paths(payload: PoseDataPayload) -> list[str]:
     """Every data file the operation will publish, excluding the two structural files."""
     return _expected_arrays(payload) + [
         "facial/blendshapes.csv", TIMELINE_FILE, "hands/handedness.csv",
@@ -183,7 +200,7 @@ def _planned_paths(payload: V2Payload) -> list[str]:
 
 # ---------------------------------------------------------------- validation before writing
 
-def prevalidate(payload: V2Payload) -> int:
+def prevalidate(payload: PoseDataPayload) -> int:
     """Check the payload against schema_v2.py before anything is written. Returns the frame count."""
     n = len(payload.timeline_rows)
     issues = []
@@ -218,7 +235,7 @@ def prevalidate(payload: V2Payload) -> int:
 
 # ---------------------------------------------------------------- staging
 
-def _write_staging(staging: Path, payload: V2Payload, fail_at: str | None) -> list[str]:
+def _write_staging(staging: Path, payload: PoseDataPayload, fail_at: str | None) -> list[str]:
     written = []
     for i, rel in enumerate(_expected_arrays(payload)):
         _write_npy_atomic(_rel_to_path(rel, staging), payload.arrays[rel])
@@ -243,7 +260,7 @@ def _write_staging(staging: Path, payload: V2Payload, fail_at: str | None) -> li
     return written
 
 
-def _validate_staged(staging: Path, payload: V2Payload, written: list[str], fail_at: str | None) -> None:
+def _validate_staged(staging: Path, payload: PoseDataPayload, written: list[str], fail_at: str | None) -> None:
     n = len(payload.timeline_rows)
     arrays = {}
     issues = []
@@ -280,7 +297,7 @@ def _validate_staged(staging: Path, payload: V2Payload, written: list[str], fail
     _check_fail("validate", fail_at)
 
 
-def _build_manifest(staging: Path, written: list[str], payload: V2Payload, fail_at: str | None) -> dict:
+def _build_manifest(staging: Path, written: list[str], payload: PoseDataPayload, fail_at: str | None) -> dict:
     entries = []
     for rel in written:
         path = _rel_to_path(rel, staging)
@@ -356,11 +373,11 @@ def _load_manifest(path: Path) -> dict | None:
 
 
 def _staging_dirs(session: Path) -> list[Path]:
-    return sorted(p for p in session.iterdir() if p.is_dir() and p.name.startswith(STAGING_PREFIX))
+    return sorted(p for p in session.iterdir() if p.is_dir() and p.name.startswith(STAGING_PREFIXES))
 
 
 def _previous_dirs(session: Path) -> list[Path]:
-    return sorted(p for p in session.iterdir() if p.is_dir() and p.name.startswith(PREVIOUS_PREFIX))
+    return sorted(p for p in session.iterdir() if p.is_dir() and p.name.startswith(PREVIOUS_PREFIXES))
 
 
 # ---------------------------------------------------------------- publication
@@ -422,6 +439,10 @@ def _publish(session: Path, staging: Path, manifest: dict, fail_at: str | None) 
 
 def _acquire_lock(session: Path) -> Path:
     """Create the lock file exclusively. A second writer, or a crashed one, leaves it in place."""
+    existing = [name for name in LOCK_FILES if (session / name).exists()]
+    if existing:
+        raise V2Error(f"another pose data operation holds {existing[0]}. If none is running, "
+                      "run recover_incomplete_v2 for this session.")
     lock = session / LOCK_FILE
     try:
         fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -437,7 +458,7 @@ def _release_lock(session: Path) -> None:
     (session / LOCK_FILE).unlink(missing_ok=True)
 
 
-def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
+def write_v2_session(session_dir, payload: PoseDataPayload, regenerate: bool = False,
                      fail_at: str | None = None) -> dict:
     """Write one version 2 session under an exclusive lock. See _write_locked for the steps."""
     session = Path(session_dir)
@@ -454,7 +475,7 @@ def write_v2_session(session_dir, payload: V2Payload, regenerate: bool = False,
     return manifest
 
 
-def _write_locked(session_dir, payload: V2Payload, regenerate: bool = False,
+def _write_locked(session_dir, payload: PoseDataPayload, regenerate: bool = False,
                   fail_at: str | None = None) -> dict:
     """Write one version 2 session. Returns the published manifest.
 
@@ -506,7 +527,7 @@ def _write_locked(session_dir, payload: V2Payload, regenerate: bool = False,
     return manifest
 
 
-def _stage_and_verify(staging: Path, payload: V2Payload, fail_at: str | None) -> dict:
+def _stage_and_verify(staging: Path, payload: PoseDataPayload, fail_at: str | None) -> dict:
     """Write, validate and checksum every staged file. Returns the manifest, which is also written to staging."""
     written = _write_staging(staging, payload, fail_at)
     _validate_staged(staging, payload, written, fail_at)
@@ -541,10 +562,11 @@ def recover_incomplete_v2(session_dir) -> list[str]:
     """
     session = Path(session_dir)
     actions = []
-    if (session / LOCK_FILE).is_file():
-        # Call this only when no operation is running: it clears the lock a crash left behind.
-        (session / LOCK_FILE).unlink()
-        actions.append(f"removed stale lock {LOCK_FILE}")
+    for name in LOCK_FILES:
+        if (session / name).is_file():
+            # Call this only when no operation is running: it clears the lock a crash left behind.
+            (session / name).unlink()
+            actions.append(f"removed stale lock {name}")
     return actions + _recover_files(session)
 
 

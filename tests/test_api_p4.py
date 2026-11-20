@@ -149,6 +149,13 @@ class RefusalTests(P4TestCase):
                             {"person": "demo_person", "session": "session-001", "kind": "delete_all"}, token=TOKEN)
         self.assertEqual((status, body["code"]), (400, "invalid_request"))
 
+    def test_older_writer_lock_name_is_refused_too(self):
+        lock = pp.DATASETS_ROOT / "demo_person" / "session-004" / ".v2-lock"
+        lock.parent.joinpath(".pose-lock").unlink(missing_ok=True)
+        lock.write_text("", encoding="utf-8")
+        status, body = self.post_job("session-004")
+        self.assertEqual((status, body["code"]), (409, "writer_lock_present"))
+
     def test_writer_lock_is_refused(self):
         status, body = self.post_job("session-004")
         self.assertEqual((status, body["code"]), (409, "writer_lock_present"))

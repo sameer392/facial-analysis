@@ -118,7 +118,7 @@ class SuccessTests(CliTestCase):
         code, _, err = self.run_cli("--regenerate-v2", detector=FakeDetector())
         self.assertEqual(code, 0, err)
         self.assertEqual(s2.session_layout(self.dataset), "v2")
-        self.assertTrue(any(p.name.startswith(".v2-previous") for p in self.dataset.iterdir()))
+        self.assertTrue(any(p.name.startswith(".pose-previous") for p in self.dataset.iterdir()))
 
 
 class InputFailureTests(CliTestCase):

@@ -38,8 +38,11 @@ LOW_VIS_COLOUR = (150, 150, 150)
 EDGE_COLOUR = (0, 200, 0)
 
 
-class V2ViewerError(Exception):
+class PoseDataViewerError(Exception):
     """A V2 session or its arrays cannot be read safely."""
+
+
+V2ViewerError = PoseDataViewerError  # old name, kept for existing imports
 
 
 @dataclass(frozen=True)

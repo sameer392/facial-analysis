@@ -14,7 +14,7 @@ job is active. Progress is per frame for v1_extract (from the script's "Processe
 other kinds.
 
 Concurrency: one active job per session across all kinds, enforced by a unique index. A session with the
-writer lock (.v2-lock) present is refused. Mutating routes require the API token (see api/main.py).
+writer lock (.pose-lock, or the older .v2-lock) present is refused. Mutating routes require the API token (see api/main.py).
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ for _p in (ROOT / "src" / "analysis", ROOT / "src" / "extraction"):
 
 import project_paths as pp  # noqa: E402
 from schema_v2 import session_layout  # noqa: E402
+from session_writer_v2 import LOCK_FILE, LOCK_FILES, PREVIOUS_PREFIXES, STAGING_PREFIXES  # noqa: E402
 from api.catalog import ApiError, _check_person  # noqa: E402
 from facial_analyzer import make_session, motion_output_paths  # noqa: E402
 from model_registry import ModelIntegrityError, get_spec, verify_model  # noqa: E402
@@ -50,8 +51,7 @@ SCRIPTS = {
     "v1_analyse": ROOT / "src" / "analysis" / "analyze_faces.py",
 }
 ACTIVE = ("queued", "running")
-LOCK_FILE = ".v2-lock"
-LEFTOVER_PREFIXES = (".v2-staging-", ".v2-previous-")
+LEFTOVER_PREFIXES = STAGING_PREFIXES + PREVIOUS_PREFIXES
 
 V2_STAGES = ("validate", "model", "extract", "assemble", "publish", "verify")
 V2_MARKERS = (
@@ -194,7 +194,7 @@ def leftovers(dataset_dir: Path, kind: str | None = None) -> list[str]:
         return []
     names = []
     for p in sorted(dataset_dir.iterdir()):
-        if p.name == LOCK_FILE or p.name.startswith(LEFTOVER_PREFIXES):
+        if p.name in LOCK_FILES or p.name.startswith(LEFTOVER_PREFIXES):
             names.append(p.name)
     frames = dataset_dir / "frames"
     if kind == "v1_extract" and not (dataset_dir / "facial_data.json").exists() \
@@ -330,7 +330,7 @@ def check_job(kind: str, person: str, session: str, regenerate: bool) -> None:
     dataset = pp.session_dataset_dir(person, session)
     if not video.is_file():
         raise ApiError("no_video", "the recording for this session is missing", 422)
-    if (dataset / LOCK_FILE).exists():
+    if any((dataset / name).exists() for name in LOCK_FILES):
         raise ApiError("writer_lock_present", "the writer lock is present; another run may be active or interrupted", 409)
 
     if kind == "v2_build":
