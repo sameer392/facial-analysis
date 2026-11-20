@@ -169,6 +169,27 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
     ]);
   }, [series.data]);
 
+  const interruptionOption = useMemo<EChartsOption | null>(() => {
+    if (!series.data || !summary.data) return null;
+    const time = series.data.time_s;
+    const areas = summary.data.quality.interruptions
+      .filter((r) => time[r.start_frame] != null && time[r.end_frame] != null)
+      .map((r) => [{ xAxis: time[r.start_frame] as number }, { xAxis: time[r.end_frame] as number }]);
+    return {
+      tooltip: { trigger: "axis" },
+      grid: { left: 50, right: 20, top: 20, bottom: 40 },
+      xAxis: { type: "value", name: "time (s)" },
+      yAxis: { type: "value", min: 0, max: 1, interval: 1, name: "face" },
+      series: [{
+        name: "face detected",
+        type: "scatter",
+        symbolSize: 4,
+        data: series.data.face_detected.map((v, i): [number | null, number] => [time[i], v === true ? 1 : 0]),
+        markArea: { silent: true, itemStyle: { color: "rgba(220, 38, 38, 0.18)" }, data: areas as never },
+      }],
+    };
+  }, [series.data, summary.data]);
+
   const motionOption = useMemo<EChartsOption | null>(() => {
     if (!series.data) return null;
     return lineOption(series.data.time_s, [
@@ -341,12 +362,20 @@ export default function FacePage({ params }: { params: Promise<{ person: string;
         ) : null}
       </section>
 
-      <section id="timeline" className="scroll-mt-6">
+      <section id="timeline" className="scroll-mt-6 flex flex-col gap-6">
         {timelineOption ? (
           <Card title="Face detection and neutral frames over time">
             <Chart option={timelineOption} height={200} label="Face detection and neutral frames over time" />
           </Card>
         ) : series.isPending ? <Loading label="Loading series…" /> : null}
+        {interruptionOption ? (
+          <Card title="Tracking interruptions (shaded periods have no face)">
+            <Chart option={interruptionOption} height={220} label="Face detected per frame, with interruptions shaded" />
+            {summary.data?.quality.interruptions.length === 0 ? (
+              <p className="mt-2 text-sm text-[var(--muted)]">No interruptions: a face was found in every frame.</p>
+            ) : null}
+          </Card>
+        ) : null}
         {series.isError ? <ErrorState message={series.error.message} /> : null}
       </section>
 
