@@ -251,6 +251,36 @@ async function send<T>(method: "POST" | "PUT", path: string, token: string, body
 
 export type DeleteResult = { deleted: boolean };
 
+/** Uploads a recording and reports progress (0 to 1) while the bytes are sent. */
+function uploadWithProgress(path: string, token: string, file: Blob, onProgress?: (fraction: number) => void):
+  Promise<{ person: string; session: string; bytes: number; uploaded: boolean }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `/api${path}`);
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("Content-Type", "video/mp4");
+    xhr.setRequestHeader("X-Facial-Token", token);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) onProgress(event.loaded / event.total);
+    };
+    xhr.onload = () => {
+      let data: { code?: string; message?: string } & Record<string, unknown> = {};
+      try {
+        data = JSON.parse(xhr.responseText) as typeof data;
+      } catch {
+        // not JSON: keep the generic message
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as { person: string; session: string; bytes: number; uploaded: boolean });
+      } else {
+        reject(new ApiFailure(xhr.status, data.code ?? "http_error", data.message ?? `Request failed (${xhr.status})`));
+      }
+    };
+    xhr.onerror = () => reject(new ApiFailure(0, "network_error", "The upload did not reach the server."));
+    xhr.send(file);
+  });
+}
+
 export const api = {
   health: () => get<Health>("/health"),
   persons: () => get<string[]>("/persons"),
@@ -297,10 +327,8 @@ export const api = {
     send<DeleteResult>("POST", `/persons/${enc(person)}/sessions/${enc(session)}/dataset/delete`, token, { confirm }),
   deleteVideo: (token: string, person: string, session: string, confirm: string) =>
     send<DeleteResult>("POST", `/persons/${enc(person)}/sessions/${enc(session)}/video/delete`, token, { confirm }),
-  uploadVideo: (token: string, person: string, session: string, file: Blob) =>
-    send<{ person: string; session: string; bytes: number; uploaded: boolean }>(
-      "PUT", `/persons/${enc(person)}/sessions/${enc(session)}/video`, token, undefined, file,
-    ),
+  uploadVideo: (token: string, person: string, session: string, file: Blob, onProgress?: (fraction: number) => void) =>
+    uploadWithProgress(`/persons/${enc(person)}/sessions/${enc(session)}/video`, token, file, onProgress),
   renamePerson: (token: string, person: string, to: string) =>
     send<{ person: string; renamed_to: string }>("POST", `/persons/${enc(person)}/rename`, token, { to }),
   renameSession: (token: string, person: string, session: string, to: string) =>

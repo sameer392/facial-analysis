@@ -7,6 +7,7 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 - Next.js Jobs page (`/jobs`): start a V2 build and cancel jobs, with the API token kept for the browser tab.
+- Upload shows a progress bar (the upload is sent with XMLHttpRequest so progress can be reported).
 - Rename a person or a recording from its row. Refused while processed data exists; delete the data, rename, then rebuild.
 - Manage page: create people, upload MP4 recordings, delete recording data, videos or whole people with typed confirmation, and clear finished job history. Every action needs the API token.
 - Face data is one job: extraction and analysis run together (`face_build`, `src/analysis/build_face_data.py`). The Jobs page offers Face data and Pose data. The separate extraction and analysis job kinds remain in the API.

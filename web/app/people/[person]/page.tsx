@@ -24,6 +24,7 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
     onSuccess: (_r, v) => { setRenaming(null); setNotice(`Renamed ${v.from} to ${v.to}.`); refresh(); },
   });
   const [notice, setNotice] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
 
   const suggested = useMemo(() => {
     const used = (sessions.data ?? []).map((s) => Number(s.session_id.replace("session-", ""))).filter(Number.isFinite);
@@ -36,7 +37,8 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
   };
 
   const upload = useMutation({
-    mutationFn: () => api.uploadVideo(token, person, session || suggested, file as File),
+    mutationFn: () => api.uploadVideo(token, person, session || suggested, file as File, setProgress),
+    onSettled: () => setProgress(null),
     onSuccess: (r) => {
       setFile(null);
       setSession("");
@@ -95,6 +97,12 @@ export default function PersonPage({ params }: { params: Promise<{ person: strin
           <div className="md:col-span-2">
             <TokenField token={token} onChange={saveToken} />
           </div>
+          {progress !== null ? (
+            <div className="md:col-span-2">
+              <progress value={progress} max={1} className="w-full" aria-label="Upload progress" />
+              <p className="text-xs text-[var(--muted)]">{Math.round(progress * 100)} % sent</p>
+            </div>
+          ) : null}
           <div className="flex items-center gap-3 md:col-span-2">
             <button
               type="submit"
