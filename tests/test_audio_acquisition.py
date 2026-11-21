@@ -500,6 +500,21 @@ class FFmpegTests(unittest.TestCase):
         self.assertEqual(manifest["retention"]["stored_file"],
                          f"audio/source/{manifest['source']['source_id']}.wav")
 
+    def test_four_channel_wav_is_decoded_and_measured(self):
+        """Regression: FFmpeg writes WAVE_FORMAT_EXTENSIBLE headers for >2 channels, which the standard
+        wave module cannot read. H9.1 now measures raw PCM, so this must succeed."""
+        wav_path = self.work / "quad.wav"
+        pcm = np.zeros((16000, 4), dtype="<i2")
+        with wave.open(str(wav_path), "wb") as w:
+            w.setnchannels(4)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(pcm.tobytes())
+        manifest = self.run_acquire(external=wav_path)
+        self.assertEqual(manifest["decoded"]["channels"], 4)
+        self.assertEqual(manifest["decoded"]["sample_count"], 16000)
+        self.assertEqual(manifest["duration_check"]["status"], "pass")
+
     def test_mp3_is_accepted_and_its_contents_are_checked(self):
         wav = self.write_wav("voice.wav", rate=44100, channels=1, seconds=0.5)
         mp3 = self.work / "voice.mp3"

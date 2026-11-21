@@ -53,7 +53,6 @@ import sys
 import tempfile
 import time
 import uuid
-import wave
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -269,15 +268,15 @@ def expected_pcm_bytes(duration_s: float, sample_rate: int, channels: int) -> in
 
 
 def _decode(src: Path, stream: AudioStream, workdir: Path, max_bytes: int | None = None) -> Path:
-    """Decode one stream to PCM WAV inside workdir, stopping if the output grows past max_bytes.
+    """Decode one stream to raw 16-bit PCM inside workdir, stopping if the output grows past max_bytes.
 
     The output size is checked while FFmpeg runs, so a source that decodes far larger than its
     metadata claims is stopped early. The caller deletes workdir.
     """
     limit = (MAX_DECODED_PCM_BYTES + WAV_HEADER_ALLOWANCE) if max_bytes is None else max_bytes
-    out = workdir / "decoded.wav"
+    out = workdir / "decoded.pcm"
     args = [_tool("ffmpeg"), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src),
-            "-map", f"0:{stream.index}", "-vn", "-sn", "-dn", "-c:a", SAMPLE_FORMAT, "-f", "wav", str(out)]
+            "-map", f"0:{stream.index}", "-vn", "-sn", "-dn", "-c:a", SAMPLE_FORMAT, "-f", "s16le", str(out)]
     proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     deadline = time.monotonic() + DECODE_TIMEOUT_S
     stderr = b""
@@ -305,23 +304,23 @@ def _decode(src: Path, stream: AudioStream, workdir: Path, max_bytes: int | None
 
 
 def _measure_wav(path: Path, stream: AudioStream) -> dict:
-    """Sample count, rate, channels and a checksum of the PCM data, read in chunks."""
-    with wave.open(str(path), "rb") as w:
-        channels, width, rate, frames = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
-        if width != 2:
-            raise AudioError(f"decoded {path.name} is not 16-bit PCM")
-        if rate != stream.sample_rate or channels != stream.channels:
-            raise AudioError("decoded audio does not match the probed sample rate or channel count")
-        if frames < 1:
-            raise AudioError("no audio samples were decoded from the selected stream")
-        digest = hashlib.sha256()
-        w.rewind()
-        while True:
-            chunk = w.readframes(COPY_CHUNK // max(channels * width, 1))
-            if not chunk:
-                break
+    """Sample count, rate, channels and a checksum of the decoded raw PCM, read in chunks.
+
+    The decode writes raw signed 16-bit little-endian PCM, not a WAV file: FFmpeg writes
+    WAVE_FORMAT_EXTENSIBLE headers for more than two channels, which the standard wave module
+    cannot read. Channel count and rate come from the probe.
+    """
+    bytes_per_frame = SAMPLE_WIDTH * stream.channels
+    size = path.stat().st_size
+    if size == 0 or size % bytes_per_frame:
+        raise AudioError("decoded audio is empty or does not contain whole sample frames")
+    frames = size // bytes_per_frame
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(COPY_CHUNK), b""):
             digest.update(chunk)
-    return {"sample_rate": rate, "channels": channels, "sample_count": frames, "pcm_sha256": digest.hexdigest()}
+    return {"sample_rate": stream.sample_rate, "channels": stream.channels, "sample_count": frames,
+            "pcm_sha256": digest.hexdigest()}
 
 
 def _copy_verified(src: Path, dest: Path, expected_sha: str) -> None:
