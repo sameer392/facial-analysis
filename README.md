@@ -41,6 +41,7 @@ training is not implemented yet.
 | Audio acquisition, phase H9.1 (session audio from the video or a WAV/MP3 file, manifest, lock, limits) | **Implemented (tests with synthetic audio; not validated on real recordings beyond one 2 s session)** |
 | Audio preprocessing and basic features, phase H9.2 (resampling, mono downmix, 10 ms energy, experimental pitch, energy-based VAD) | **Implemented (synthetic tests; no speech accuracy claimed)** |
 | Audio ASR, alignment, phonemes, Audio page | **Not implemented** (H9.3 onwards; the dashboard page is a placeholder) |
+| ASR interface and transcription dataset, phase H9.3a (engine-independent adapter, schemas, validation, atomic publication; fake engine only) | **Implemented (tests with a fake engine; no ASR runtime, no accuracy claim)** |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
 | Neural network training and inference | **Not implemented** (`src/training/`, `src/inference/` are empty) |
 
@@ -434,6 +435,66 @@ extrapolation, not a measurement.
 **Tests.** `tests/test_audio_acquisition.py` (64), `tests/test_audio_signal.py` (32) and `tests/test_audio_processing.py`
 (32). Setting `AUDIO_TESTS_REQUIRE_FFMPEG=1` is recommended for CI, so that a missing FFmpeg fails instead of skipping; CI is not yet configured with it. Without it, the
 FFmpeg-dependent tests are skipped and the reason is printed.
+
+## ASR interface and transcription dataset (H9.3a)
+
+H9.3a defines the transcription layer without any speech recognition runtime. Only a deterministic fake engine
+exercises it. faster-whisper, whisper.cpp and IndicConformer are not installed or called. Nothing is downloaded.
+
+**Adapter boundary.** `src/extraction/asr_interface.py` defines `AsrEngine`, with `info` and
+`transcribe(samples, sample_rate, request)`. An engine returns an `EngineResult`: the raw text, the language, an
+optional language probability, and segments with words. Each segment and word carries its float start and end times
+in seconds, and optional `avg_logprob`, `no_speech_prob` and word `probability`. Nothing in the dataset depends on
+an engine's runtime, so the engine can be replaced without changing the H9.1 or H9.2 outputs.
+
+**Language.** `en` and `hi` are the supported codes. An explicit request must be answered in that language, or the
+response is refused. `auto` requires the engine to return `en` or `hi`. Automatic detection never translates.
+
+**Validation of engine responses.** Each response is checked before anything is written, and refused rather than
+repaired: a non-string text; an unsupported language; a time that is negative, non-finite or ends before it starts;
+a segment that ends after the audio or starts before the previous one ends; words outside their segment or out of
+order; a probability outside 0 to 1; a positive `avg_logprob`.
+
+**Timing.** An engine's float seconds are converted once, with round half up, to integer analysis-sample indexes.
+Microseconds come from the H9.1 timeline:
+
+    session_us = audio_start + external_offset - origin   (integer microseconds, negative values valid)
+
+Times are never clamped. Validation checks ordering, bounds, and that each microsecond value equals the value
+recomputed from its sample index.
+
+**Text.** `raw_text` is the engine's text, stored exactly. `normalized_text` is stored beside it. Normalisation is
+Unicode NFC and whitespace only. It does not change case, punctuation, spelling or script, and it does not translate.
+A reviewer can therefore always compare what the engine produced with the stored text.
+
+**Outputs** under `audio/transcription/`, written to a staging folder, read back, and then moved into place:
+
+| File | Content |
+|---|---|
+| `transcript.json` (`transcription-1`) | engine name, version, model name, revision and checksum; decoding options; requested and selected language and probability; `raw_text` and `normalized_text`; source SHA-256 from H9.1; analysis sample rate and count; timeline; counts; reserved `speaker` (null); effective configuration |
+| `segments.csv` | segment index; start and end samples and microseconds; language; raw and normalised text; `avg_logprob`; `no_speech_prob`; the raw float times as text; `speaker` |
+| `words.csv` | segment index; word index; raw word; start and end samples and microseconds; `probability`; the raw float times; `speaker` |
+| `transcription_metadata.json` | written last; lists each file with its SHA-256 and size |
+
+A missing value is written as `null` in JSON and an empty cell in CSV. Confidence is never invented.
+
+**Preconditions and publication.** The H9.1 manifest is read, and the source is re-verified against its SHA-256. The
+H9.2 outputs are checked against their recorded hashes. The H9.1 session lock is held throughout. An existing
+transcription is refused unless `regenerate` is given. A regeneration keeps the previous folder until the new one is
+in place, and restores it if publication fails. An engine failure, of any kind, publishes nothing. H9.1 and H9.2
+files are never modified.
+
+**Limitations.**
+- The interface takes the whole analysis signal in memory, up to the 1 GiB analysis limit. This is acceptable for
+  this prototype. Streaming or chunked inference is the main review item before H9.3b. It affects word timestamps,
+  which can depend on context across chunk boundaries, so it must be evaluated first.
+- Normalisation is a baseline. Numbers, dates, nukta forms and punctuation are not yet normalised for evaluation.
+- The speaker field is reserved and always null. Diarisation is not implemented.
+- No real ASR output has been produced or checked. No accuracy claim is made for English or Hindi.
+- No command-line entry point exists for transcription yet.
+
+**Tests.** `tests/test_asr_interface.py` (28) and `tests/test_transcription.py` (30). The end-to-end tests decode through
+FFmpeg and use the same visible-skip rule as the other audio tests.
 
 ## Dashboard
 

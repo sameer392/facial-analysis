@@ -153,6 +153,7 @@ Session folders are `datasets/<person>/<session>/`. The root is set by `project_
 - `manifest.json` (H9.1 acquisition; the source is never modified)
 - `source/` (only when external audio was retained with `--retain`)
 - `features/`, `vad/`, `quality/` and `processing_manifest.json` (H9.2; `processing_manifest.json` is written last)
+- `transcription/` (H9.3a: `transcript.json`, `segments.csv`, `words.csv`, `transcription_metadata.json`, written last)
 - `.acquire.lock` (session lock; held by acquisition and processing; never removed automatically)
 Audio does not change the pose or face layouts. Times are integer microseconds from the session origin.
 
@@ -234,6 +235,7 @@ Do not describe a phase as implemented when only some of its steps are.
 - Hand motion (H1 to H7): implemented and tested with synthetic data. Landmarks, tracking, motion metrics, rule-based gestures, dataset validation, the API and the Hands page. Gesture thresholds are uncalibrated (no labelled ground truth exists yet). The Hand Landmarker licence is unverified.
 - Video playback and landmark overlays (H8.2 to H8.5): implemented. The native player, the video and HLW1 landmark-window routes (localhost-only, Host and Sec-Fetch-Site checks), the synchronised overlays and the eight-window cache. Browser CPU, memory and rendering performance have not been measured. The timing check is cached in memory only; a persistent cache is not implemented.
 - Audio acquisition (H9.1) and preprocessing and features (H9.2): implemented and tested with synthetic audio. Acquisition reads the video's audio or a WAV/MP3 file, under a per-session lock with a stale-lock policy that never removes a lock automatically. Processing resamples to a mono analysis rate with an equal-weight mean downmix, and computes 10 ms energy, an experimental pitch estimate and an energy-based VAD baseline. No speech accuracy has been measured. Not implemented: ASR, alignment, phonemes, the API and the Audio page.
+- Transcription interface and dataset (H9.3a): implemented with a fake engine only. `asr_interface.py` defines the engine-independent `AsrEngine` boundary, and validates each engine response before anything is written (refused, never repaired). `transcription.py` writes `audio/transcription/` with raw and normalised text kept separately (normalisation: Unicode NFC and whitespace only), integer-sample timing on the H9.1 timeline (negative session times valid), and atomic, regeneration-safe publication. No ASR runtime, model or download is present. Whole-signal input in memory is a review item before H9.3b.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.
