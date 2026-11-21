@@ -5,11 +5,16 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- H9.1 audio acquisition failed for sources with more than two channels: FFmpeg writes a WAVE_FORMAT_EXTENSIBLE header, which the standard `wave` module cannot read. Decoding now produces raw 16-bit PCM and the decoded bytes are measured directly. Mono and stereo SHA-256 values are unchanged. Regression test added.
+
 ### Removed
 - Streamlit dashboard (phase P7, approved in writing). `src/dashboard/app.py`, `common.py`, `dashboard_bootstrap.py`, `pages/` and `src/analysis/visualization.py` are deleted. Streamlit and Plotly are removed from `requirements.txt`. The Next.js dashboard with the Python API replaces it.
 - `src/dashboard/` renamed to `src/viewer/`: `overlay.py` and `pose_viewer.py` are the framework-free helpers the API uses.
 
 ### Added
+- Audio acquisition H9.1: `src/extraction/build_audio_session.py` reads a session's audio from the recording's first audio stream, or from a WAV or MP3 file (`--external`), and writes `audio/manifest.json`. Original media is never modified. Per-session lock with a stale-lock policy that never removes a lock automatically (`--clear-stale-lock` is explicit). Limits: 2 GB source, 4 hours, 3 GiB decoded PCM. External audio is kept only with `--retain`; embedded audio is never copied.
+- Audio preprocessing and basic features H9.2: `src/extraction/build_audio_features.py` resamples to a configurable analysis rate (default 16 kHz) with an equal-weight mean downmix, and writes 40 ms / 10 ms frame energy, an experimental pitch estimate (60 to 400 Hz), and an energy-based VAD baseline under `audio/features/`, `audio/vad/` and `audio/quality/`. Integer-microsecond timing from the H9.1 timeline. Staged, validated and atomically published. Synthetic tests only; no speech accuracy claimed. Documented in the README and in `src/extraction/audio_processing.py`.
 - Video playback H8.2: secure video streaming and landmark windows. `GET .../video` streams the original recording with HTTP Range support. `GET .../landmarks/window` returns 1 to 30 frames of face, pose and hand landmarks in the HLW1 binary format (version 1). `GET .../video/timing` compares decoded frame times with the extracted timeline. All three are read-only, accept only local requests (Host and Sec-Fetch-Site checks), and refuse path traversal and symlink escapes.
 - Video playback H8.3: native HTML5 video player on the Hands page, with play, pause, seeking, speed (0.25x to 2x), mute, volume, and frame-by-frame stepping. Frame review remains a separate mode.
 - Video playback H8.4: facial, pose and left and right hand landmarks drawn on a transparent canvas over the video, synchronised with each presented frame by timestamp (never `currentTime x fps`). Per-stream visibility controls. Overlays are enabled only when the timing check reports `synchronized`. The HLW1 parser (`web/app/lib/hlw1.ts`) rejects malformed windows.

@@ -126,7 +126,7 @@ src/
                               the web app, write endpoints, job system (docs/proposals/nextjs_migration.md)
   extraction/                 video_frames.py, model_registry.py, pose_extractor.py,
                               pose_builder.py, build_pose_session.py (Pose data command-line entry point)
-                              (hand and audio extraction: not implemented)
+                              (audio acquisition and features: H9.1 and H9.2, see Section 6)
   training/                   placeholders only (.gitkeep)
   inference/                  placeholders only (.gitkeep)
 tests/                        see section 13
@@ -148,6 +148,13 @@ README.md
 ## 5. Dataset Layouts and Backward Compatibility
 
 Session folders are `datasets/<person>/<session>/`. The root is set by `project_paths.py`, and can be redirected with the `FACIAL_DATA_HOME` environment variable (the folder must contain `recordings/` and `datasets/`). Recordings are read from `recordings/raw/<person>/<session>.mp4`.
+
+### Audio data layout (session `audio/` folder)
+- `manifest.json` (H9.1 acquisition; the source is never modified)
+- `source/` (only when external audio was retained with `--retain`)
+- `features/`, `vad/`, `quality/` and `processing_manifest.json` (H9.2; `processing_manifest.json` is written last)
+- `.acquire.lock` (session lock; held by acquisition and processing; never removed automatically)
+Audio does not change the pose or face layouts. Times are integer microseconds from the session origin.
 
 ### Face data layout (session root)
 
@@ -226,6 +233,7 @@ Do not describe a phase as implemented when only some of its steps are.
 - Body Motion dashboard page: read-only viewer of existing pose data sessions (the Body Motion page is now in `web/`; its support code is `src/viewer/pose_viewer.py`). Only sessions that pass the metadata and manifest checks are listed. Playback is not implemented. Tested with synthetic data and headless runs.
 - Hand motion (H1 to H7): implemented and tested with synthetic data. Landmarks, tracking, motion metrics, rule-based gestures, dataset validation, the API and the Hands page. Gesture thresholds are uncalibrated (no labelled ground truth exists yet). The Hand Landmarker licence is unverified.
 - Video playback and landmark overlays (H8.2 to H8.5): implemented. The native player, the video and HLW1 landmark-window routes (localhost-only, Host and Sec-Fetch-Site checks), the synchronised overlays and the eight-window cache. Browser CPU, memory and rendering performance have not been measured. The timing check is cached in memory only; a persistent cache is not implemented.
+- Audio acquisition (H9.1) and preprocessing and features (H9.2): implemented and tested with synthetic audio. Acquisition reads the video's audio or a WAV/MP3 file, under a per-session lock with a stale-lock policy that never removes a lock automatically. Processing resamples to a mono analysis rate with an equal-weight mean downmix, and computes 10 ms energy, an experimental pitch estimate and an energy-based VAD baseline. No speech accuracy has been measured. Not implemented: ASR, alignment, phonemes, the API and the Audio page.
 - Training and inference layers: not implemented.
 
 Do not claim that pose extraction, hand extraction, audio analysis, training or inference works until the code and tests show it.

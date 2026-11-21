@@ -38,7 +38,9 @@ training is not implemented yet.
 | Body Motion (Pose data Pose) dashboard page | **Implemented as a read-only viewer** of existing pose data sessions: overlay, visibility threshold, timeline, joints and quality. It does not generate pose data. Hand view not implemented. |
 | Native video playback with synchronised facial, pose and hand landmark overlays (H8.2 to H8.5) | **Implemented.** Checked manually in the browser for playback, seeking, speed, session switching and overlays. Browser CPU, memory and rendering performance not measured. Localhost only. See the Video playback section |
 | Model licence clearance for commercial use or redistribution | **Not cleared.** Pose FULL is partly verified; Face and Hand are unverified. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
-| Audio feature analysis | **Not implemented** (dashboard page is a placeholder) |
+| Audio acquisition, phase H9.1 (session audio from the video or a WAV/MP3 file, manifest, lock, limits) | **Implemented (tests with synthetic audio; not validated on real recordings beyond one 2 s session)** |
+| Audio preprocessing and basic features, phase H9.2 (resampling, mono downmix, 10 ms energy, experimental pitch, energy-based VAD) | **Implemented (synthetic tests; no speech accuracy claimed)** |
+| Audio ASR, alignment, phonemes, Audio page | **Not implemented** (H9.3 onwards; the dashboard page is a placeholder) |
 | Body pose analysis | **Not implemented** (dashboard page is a placeholder) |
 | Neural network training and inference | **Not implemented** (`src/training/`, `src/inference/` are empty) |
 
@@ -337,6 +339,101 @@ authentication is added to the read routes.
   recording that fails it stays unsynchronised. The mapping was checked on constant-frame-rate recordings only.
 - Not implemented: a persistent timing-validation cache; a per-frame detection score in the API (so the page shows
   detection status, not a score); frame numbers shown during playback.
+
+## Audio acquisition and features (H9.1, H9.2)
+
+Audio is stored per session in `datasets/<person>/<session>/audio/`, separate from the pose data. Original videos
+and external files are never modified.
+
+**Commands** (run from the project root; the analysis run needs the acquisition run first):
+
+```
+python src/extraction/build_audio_session.py <person> <session> [--external FILE.wav|FILE.mp3] [--stream N]
+                                             [--offset-us N] [--retain] [--force] [--clear-stale-lock]
+python src/extraction/build_audio_features.py <person> <session> [--external FILE] [--regenerate]
+                                             [--analysis-rate HZ] [--window-ms MS] [--hop-ms MS]
+                                             [--pitch-min-hz HZ] [--pitch-max-hz HZ] [--pitch-threshold X]
+                                             [--silence-db DB] [--vad-db DB] [--vad-min-speech-ms MS]
+                                             [--vad-min-silence-ms MS] [--vad-merge-gap-ms MS]
+```
+
+Acquisition (H9.1) reads the first audio stream of the recording, or the file given with `--external`. It writes
+`audio/manifest.json` only. Limits: 2 GB source, 4 hours of audio, and 3 GiB of decoded PCM. A per-session lock
+(`audio/.acquire.lock`) stops two runs from overlapping. A stale lock is reported and is never removed
+automatically; `--clear-stale-lock` removes it only after confirming the owning process has stopped.
+
+Processing (H9.2) needs the H9.1 manifest. It checks the source's SHA-256 first. An external file that H9.1 did not
+retain must be supplied again with `--external`. It runs under the same lock, and it never runs acquisition itself.
+
+**Preprocessing.** FFmpeg decodes the selected stream, mixes it to mono and resamples it to the analysis rate
+(default 16 kHz), producing 32-bit float in a temporary file that is deleted afterwards. The downmix is an equal-weight
+mean of all channels, written as an explicit `pan` expression. Every channel counts, including any LFE channel, so
+the result is a simple analysis baseline. It is not a broadcast downmix. The resampler is FFmpeg's default
+(windowed sinc). Its version is recorded in the metadata. The analysis signal is read in blocks, so memory grows
+with the number of frames, not the length of the audio. The analysis signal is limited to 1 GiB, which is about
+four hours at 16 kHz. The size is checked before decoding and watched while FFmpeg runs.
+
+**Timing.** Session time is an integer number of microseconds:
+
+    session_us(j) = audio_start_us + round(j * 1e6 / analysis_rate) + external_offset_us - origin_us
+
+`audio_start_us` is the first audio timestamp from the probe. `origin_us` is the first video timestamp, or 0 when
+there is no video. `external_offset_us` is positive when the external audio starts later on the session clock. An
+offset is refused for embedded audio. A frame's reference time is its window centre, sample
+`i * hop + window // 2`.
+
+**Frames.** Window 40 ms, hop 10 ms (both configurable). A frame is emitted only when its whole window lies inside
+the signal. Leftover samples at the end are reported, not padded.
+
+**Energy.** `rms` is linear with full scale 1.0. `energy_db` is in dBFS with a floor of -120 dB. A frame below -50 dBFS is
+marked silent.
+
+**Pitch (experimental).** Normalised cross-correlation over lags covering 60 to 400 Hz, choosing a local maximum within
+90% of the best peak, with parabolic refinement. Voiced needs correlation of at least 0.6 and a non-silent frame.
+Synthetic tones at 90 to 380 Hz are estimated within 0.02 Hz, and white noise is not treated as voiced. That does
+not establish pitch accuracy for speech, for any speaker, language or recording condition. Octave errors are
+possible. The estimator is isolated so that it can be replaced.
+
+**Voice activity (baseline).** Energy-based: speech when `energy_db` is at or above -40 dBFS. Gaps up to 200 ms are
+merged, speech shorter than 100 ms is dropped, and silence of at least 200 ms is reported. Boundaries are at 10 ms
+resolution. This is not ground truth and has not been evaluated against any annotation. The thresholds are
+absolute, so they depend on recording gain.
+
+**Outputs.** Written to `audio/`, and documented in `src/extraction/audio_processing.py`:
+
+| File | Content |
+|---|---|
+| `manifest.json` (H9.1) | source, streams, decoded counts, duration check, timeline, retention |
+| `features/audio_features.csv` | per frame: start and centre samples, `t_us`, `rms`, `energy_db`, `pitch_status` (voiced, unvoiced or silent), `f0_hz` (empty when not voiced), `f0_confidence` |
+| `features/feature_metadata.json` | configuration, timeline base, preprocessing record (rates, counts, downmix expression, resampler, FFmpeg version) |
+| `vad/vad_frames.csv` | per frame speech decision |
+| `vad/vad_segments.csv` | speech and silence segments, in samples and microseconds |
+| `vad/vad_metadata.json` | VAD rule and configuration |
+| `quality/audio_quality.json` | technical measurements only: lengths, peak, RMS, clipping, silence, voiced and speech ratios |
+| `processing_manifest.json` | written last; lists each published file with its SHA-256 |
+
+Outputs are staged, read back and checked, then moved into place. An existing output is refused unless `--regenerate`
+is given. A regeneration moves the old outputs and the old `processing_manifest.json` aside, and restores them if
+publication fails. Interrupted runs leave no valid completion marker.
+
+**Not in H9.2.** Speech recognition, language identification, G2P, phoneme alignment, neural VAD, the API, the
+Audio page and any real-speech accuracy measurement.
+
+**Performance (synthetic, stereo 44.1 kHz).** A 10-minute input takes about 0.5 s to acquire and about 56 s to
+process, roughly 10.6 times real time, with a peak process memory of about 76 MB (fresh process). This is not measured
+on a long real recording: the only real session in the project is 2 seconds long. Processing time for one hour is an
+extrapolation, not a measurement.
+
+**Limitations.**
+- No labelled speech data exists, so no accuracy claim is made for pitch, VAD or any transcript.
+- The downmix is an equal-weight mean, not a standards-based downmix.
+- The pitch estimator is experimental.
+- Temporary disk use is about 4 bytes per analysis sample while processing; it is deleted afterwards.
+- The whole source is hashed on each processing run, which adds time for large files.
+
+**Tests.** `tests/test_audio_acquisition.py` (64), `tests/test_audio_signal.py` (32) and `tests/test_audio_processing.py`
+(32). Setting `AUDIO_TESTS_REQUIRE_FFMPEG=1` is recommended for CI, so that a missing FFmpeg fails instead of skipping; CI is not yet configured with it. Without it, the
+FFmpeg-dependent tests are skipped and the reason is printed.
 
 ## Dashboard
 
