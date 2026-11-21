@@ -1,5 +1,6 @@
 ﻿# Virtual environment (not committed)
 .venv/
+.venv-asr/
 
 # Python cache
 __pycache__/
